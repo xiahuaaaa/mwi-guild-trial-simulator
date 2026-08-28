@@ -10,7 +10,7 @@
  *   node scripts/publish-member-plugin.mjs --notes "fix: ..."
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,13 +80,22 @@ function assertGreasyForkUrls(source) {
   if (!source.includes("@namespace    https://greasyfork.org/users/1466859-adudu")) {
     throw new Error("do not change @namespace; Tampermonkey treats it as a new script");
   }
-  if (!/^\/\/\s*@name\s+MWI 公会试炼资料同步助手\s*$/m.test(source)) {
-    throw new Error("do not change primary @name; updates would show as Install");
-  }
+}
+
+function stampGreasyForkName(source) {
+  // Workspace may use TMD-guild-trial-sync; Greasy Fork identity must stay the Chinese @name.
+  return source.replace(
+    /^\/\/\s*@name\s+.+$/m,
+    "// @name         MWI 公会试炼资料同步助手",
+  );
 }
 
 const source = readFileSync(SOURCE, "utf8");
 assertGreasyForkUrls(source);
+const distSource = stampGreasyForkName(source);
+if (!/^\/\/\s*@name\s+MWI 公会试炼资料同步助手\s*$/m.test(distSource)) {
+  throw new Error("do not change primary @name; updates would show as Install");
+}
 const version = readVersion(source);
 console.log(`publishing plugin v${version}`);
 console.log(`source: ${SOURCE}`);
@@ -103,7 +112,7 @@ try {
   const distDir = join(work, "dist");
   mkdirSync(distDir, { recursive: true });
   const distPath = join(distDir, DIST_NAME);
-  copyFileSync(SOURCE, distPath);
+  writeFileSync(distPath, distSource);
 
   const status = run(["git", "status", "--porcelain"], work);
   if (!status.stdout.trim()) {

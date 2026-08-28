@@ -46,7 +46,7 @@ test("page bridge normalizes real MWI wearable and ability maps", () => {
 });
 
 test("member exporter is a zero-configuration TMD uploader", () => {
-  assert.match(source, /@version\s+0\.6\.19/);
+  assert.match(source, /@version\s+0\.6\.20/);
   assert.match(source, /@name\s+TMD-guild-trial-sync/);
   assert.match(source, /@name:en\s+TMD-guild-trial-sync/);
   assert.match(source, /@match\s+https:\/\/www\.milkywayidlecn\.com\/\*/);
@@ -132,6 +132,8 @@ test("member exporter highlights the current public combat assignment and abilit
   assert.match(source, /new MutationObserver/);
   assert.match(source, /abilityHrids/);
   assert.match(source, /assignmentUnavailable/);
+  assert.match(source, /COMBAT_ASSIGNMENT_POLL_MS = 2 \* 60 \* 1000/);
+  assert.match(source, /assignmentAttemptFresh/);
   assert.match(source, /COMBAT_ABILITY_ICON_BASE/);
   assert.match(source, /adudu-guild-sync-skill-icon/);
 });
