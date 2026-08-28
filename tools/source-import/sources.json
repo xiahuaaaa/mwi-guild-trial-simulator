@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-24T00:00:00+08:00",
+  "shykai": {
+    "projectUrl": "https://github.com/shykai/MWICombatSimulatorTest",
+    "deploymentBaseUrl": "https://shykai.github.io/MWICombatSimulatorTest/dist/",
+    "repositoryCommit": "6bbe086168d5a675f2643265afe7459db823c1ea",
+    "repositoryCommitDate": "2024-08-06T16:00:07Z",
+    "deploymentLastModified": "2026-05-05T13:56:51Z",
+    "license": "MIT",
+    "licenseCopyright": "Copyright (c) 2024 AmVoidGuy",
+    "artifacts": [
+      {
+        "file": "bundle.js.map",
+        "sha256": "a2ce8165ff0515e3e3ec1695502b6aa16fb3acae8a72970eaf92a8c1811c4388"
+      },
+      {
+        "file": "src_worker_js.bundle.js.map",
+        "sha256": "c8b71b5d3a217dd97ccae9003cf604961bfc6fdec1715941165aa9805117dce5",
+        "sourceModules": [
+          {
+            "path": "src/combatsimulator/combatUtilities.js",
+            "sha256": "806c4e64153a590c918dfccd9c6e8abf5ae3aaf92ff57cb232a8746cd580ca12"
+          },
+          {
+            "path": "src/combatsimulator/player.js",
+            "sha256": "9f8e5c02ec583f4d093d634c544b83c755143dea54d53ca2d6d6f1565a614ef1"
+          },
+          {
+            "path": "src/combatsimulator/monster.js",
+            "sha256": "0c9e74545a038a80a91a6c2c7e764499cdfd188a31cd44eac07fa2974174e345"
+          },
+          {
+            "path": "src/combatsimulator/ability.js",
+            "sha256": "cc8c07cc7c883eeb1acca8dacf2e2b864027c7b42a75e9e2872d6377a2ea1c43"
+          },
+          {
+            "path": "src/combatsimulator/buff.js",
+            "sha256": "33d6ac40fa568f9d7047c4b76b4cd689e7e50b432faae1d8b665a466966d28eb"
+          },
+          {
+            "path": "src/combatsimulator/trigger.js",
+            "sha256": "c2d4ff1e445c09d0d83813346296b9bd958c485a71f6a71e0e1c5b6636744601"
+          }
+        ]
+      },
+      {
+        "file": "src_multiWorker_js-_004d0.bundle.js.map",
+        "sha256": "a80f68172a2f9351d02d149d54fc2b5b9812a438f87ebe2d6552c2a758d3bd5c"
+      },
+      {
+        "file": "LICENSE",
+        "url": "https://raw.githubusercontent.com/shykai/MWICombatSimulatorTest/main/LICENSE",
+        "sha256": "6821d0c99790a16a45ca4004f4938d833aaab82c5926f97225c17cfa4d8d9ca6"
+      }
+    ]
+  },
+  "soloSim": {
+    "greasyForkScriptId": 568289,
+    "version": "0.2.5",
+    "author": "frotty",
+    "declaredLicense": "MIT",
+    "savedPage": {
+      "repositoryRelativePath": "raw/scripts/568289-solosim-milky-way-idle-solo-combat-simul.user.js",
+      "sha256": "462fbd8dba11d264872c61205603858ca143c2f8131897ca25e4e94a919ff71d",
+      "recoveredCodeSha256": "c55d7fc5edd1ee48f7dcc33b16a81402216c45da93ded35358cf80eaeb4d60f9"
+    },
+    "installArtifact": {
+      "url": "https://update.greasyfork.org/scripts/568289/SoloSim%20-%20Milky%20Way%20Idle%20Solo%20Combat%20Simulator.user.js",
+      "sha256": "5b7e32308bea3691dcd591771dd9e69d76a44e53da8cd0c98e8eb45856bbee86"
+    },
+    "usage": "Reference only; no SoloSim source is copied into combat-core."
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": 3,
+  "client_revision": 9,
+  "captured_at": "2026-07-24T12:00:00.000Z",
+  "guild": {
+    "id": 9001,
+    "name": "FixtureGuild"
+  },
+  "reporter": {
+    "player_id": 100003,
+    "display_name": "FixtureReporter"
+  },
+  "week": {
+    "combat_trial_hrids": [
+      "/guild_combat/jellyfish",
+      "/guild_combat/hedgehog"
+    ]
+  },
+  "capability": {
+    "player_id": 100003,
+    "skills": {
+      "/skills/magic": 140
+    },
+    "combat_weapon": {
+      "item_hrid": "/items/blazing_trident",
+      "enhancement_level": 15
+    },
+    "aura_abilities": [
+      {
+        "ability_hrid": "/abilities/mystic_aura",
+        "level": 40
+      }
+    ],
+    "has_shield": false
+  }
+}

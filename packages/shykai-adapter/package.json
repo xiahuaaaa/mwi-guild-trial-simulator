@@ -1,0 +1,12 @@
+{
+  "name": "@mwi-guild-trial/shykai-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test --experimental-strip-types ../../tests/core/shykai-adapter.test.ts"
+  }
+}

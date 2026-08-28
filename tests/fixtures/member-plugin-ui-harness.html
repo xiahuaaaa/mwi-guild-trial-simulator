@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MWI 成员插件 UI 验收</title>
+  <style>
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #10182a, #263557);
+      color: #f7f9ff;
+      font: 16px/1.5 system-ui, sans-serif;
+    }
+    main { padding: 32px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>MWI 成员插件 UI 验收页</h1>
+    <p>本页只用于验证面板展开、缩小和刷新持久化，不上传任何角色资料。</p>
+  </main>
+  <script>
+    window.unsafeWindow = window;
+    window.GM_getValue = (key, fallback) => {
+      const value = localStorage.getItem(`gm:${key}`);
+      return value == null ? fallback : JSON.parse(value);
+    };
+    window.GM_setValue = (key, value) => {
+      localStorage.setItem(`gm:${key}`, JSON.stringify(value));
+    };
+    window.GM_xmlhttpRequest = (options) => {
+      options.onerror?.({ error: "UI harness intentionally blocks network requests" });
+    };
+  </script>
+  <script src="/userscripts/member-candidate-loadout-exporter.user.js"></script>
+</body>
+</html>

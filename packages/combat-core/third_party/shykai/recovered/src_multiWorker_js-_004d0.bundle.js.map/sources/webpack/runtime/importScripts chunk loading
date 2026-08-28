@@ -1,0 +1,14 @@
+__webpack_require__.b = self.location + "";
+
+// object to store loaded chunks
+// "1" means "already loaded"
+var installedChunks = {
+	"src_multiWorker_js-_004d0": 1
+};
+
+// no chunk install function needed
+// no chunk loading
+
+// no HMR
+
+// no HMR manifest

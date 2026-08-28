@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mwi.local/schemas/monster-fixture.schema.json",
+  "title": "MWI Guild Trial current-week monster fixture",
+  "type": "object",
+  "required": ["schemaVersion", "fixtureId", "observedAt", "source", "rules", "bosses", "validationNeeded"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "fixtureId": { "type": "string", "minLength": 1 },
+    "observedAt": { "type": "string", "format": "date" },
+    "source": {
+      "type": "object",
+      "required": ["type", "confidence"],
+      "properties": {
+        "type": { "const": "user-supplied-game-screenshots" },
+        "confidence": { "const": "displayed-values-confirmed" }
+      },
+      "additionalProperties": false
+    },
+    "rules": {
+      "type": "object",
+      "required": [
+        "durationSeconds",
+        "startLevel",
+        "levelStepOnKill",
+        "maxLevel",
+        "monsterHpPerParticipantPercent",
+        "repeatCount",
+        "seeds",
+        "membersInCurrentAssignment",
+        "observedTeamCapacity",
+        "consumables",
+        "passiveHpMpRegenFlatBonusPercent",
+        "passiveRegenScope",
+        "maxBlockRollsPerIncomingAttack",
+        "scalingPolicy",
+        "transitionPolicy",
+        "combatPolicy"
+      ],
+      "properties": {
+        "durationSeconds": { "const": 3600 },
+        "startLevel": { "const": 100 },
+        "levelStepOnKill": { "const": 10 },
+        "maxLevel": { "const": 300 },
+        "monsterHpPerParticipantPercent": { "const": 1 },
+        "repeatCount": { "const": 3 },
+        "seeds": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+        },
+        "membersInCurrentAssignment": { "const": 40 },
+        "observedTeamCapacity": { "const": 48 },
+        "consumables": { "const": "disabled" },
+        "passiveHpMpRegenFlatBonusPercent": { "const": 3 },
+        "passiveRegenScope": { "const": "regen_tick_hp_mp_additive" },
+        "maxBlockRollsPerIncomingAttack": { "const": 5 },
+        "scalingPolicy": { "$ref": "#/$defs/scalingPolicy" },
+        "transitionPolicy": { "$ref": "#/$defs/transitionPolicy" },
+        "combatPolicy": { "$ref": "#/$defs/combatPolicy" }
+      },
+      "additionalProperties": false
+    },
+    "bosses": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/$defs/monster" }
+    },
+    "validationNeeded": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "scalingPolicy": {
+      "type": "object",
+      "required": ["id", "status", "source"],
+      "properties": {
+        "id": { "const": "guild-trial-level-plus-10-over-110-v1" },
+        "status": { "const": "confirmed" },
+        "source": { "const": "2026-07-28-jellyfish-floor15-47p-screenshot" }
+      },
+      "additionalProperties": false
+    },
+    "transitionPolicy": {
+      "type": "object",
+      "required": ["spawnDelayMs", "playerHp", "playerMp", "cooldowns", "buffs", "debuffs", "shields", "casts"],
+      "properties": {
+        "spawnDelayMs": { "type": "null" },
+        "playerHp": { "const": "unknown" },
+        "playerMp": { "const": "unknown" },
+        "cooldowns": { "const": "unknown" },
+        "buffs": { "const": "unknown" },
+        "debuffs": { "const": "unknown" },
+        "shields": { "const": "unknown" },
+        "casts": { "const": "unknown" }
+      },
+      "additionalProperties": false
+    },
+    "combatPolicy": {
+      "type": "object",
+      "required": [
+        "consumables",
+        "passiveRegenFlatBonus",
+        "passiveRegenScope",
+        "passiveRegenRounding",
+        "maxBlockRollsPerIncomingAttack",
+        "healingMultiplier",
+        "lifeStealMultiplier",
+        "manaLeechMultiplier",
+        "deathBehavior",
+        "allDeadBehavior",
+        "targetPolicy"
+      ],
+      "properties": {
+        "consumables": { "const": "disabled" },
+        "passiveRegenFlatBonus": { "const": 0.03 },
+        "passiveRegenScope": { "const": "regen_tick_hp_mp_additive" },
+        "passiveRegenRounding": { "const": "unknown" },
+        "maxBlockRollsPerIncomingAttack": { "const": 5 },
+        "healingMultiplier": { "const": "unknown" },
+        "lifeStealMultiplier": { "const": "unknown" },
+        "manaLeechMultiplier": { "const": "unknown" },
+        "deathBehavior": { "const": "unknown" },
+        "allDeadBehavior": { "const": "unknown" },
+        "targetPolicy": { "const": "unknown" }
+      },
+      "additionalProperties": false
+    },
+    "ruleProvenance": {
+      "type": "object",
+      "required": ["status", "value", "source"],
+      "properties": {
+        "status": { "enum": ["confirmed", "assumed", "unknown"] },
+        "value": {},
+        "source": { "type": ["string", "null"] },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "monster": {
+      "type": "object",
+      "required": [
+        "hrid",
+        "nameZh",
+        "level",
+        "combatStyle",
+        "damageType",
+        "attackIntervalSeconds",
+        "castSpeedPercent",
+        "abilityHaste",
+        "accuracy",
+        "damage",
+        "defenseDamageDisplay",
+        "maxHp",
+        "maxMp",
+        "evasion",
+        "armor",
+        "resistance",
+        "tenacity",
+        "threat",
+        "abilities"
+      ],
+      "properties": {
+        "hrid": { "type": "string", "minLength": 1 },
+        "nameZh": { "type": "string", "minLength": 1 },
+        "level": { "const": 100 },
+        "combatStyle": { "enum": ["stab", "slash", "smash", "ranged", "magic"] },
+        "damageType": { "enum": ["physical", "water", "nature", "fire"] },
+        "attackIntervalSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "castSpeedPercent": { "type": "number", "minimum": 0 },
+        "abilityHaste": { "type": "number", "minimum": 0 },
+        "accuracy": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "number", "minimum": 0 }
+        },
+        "damage": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "number", "minimum": 0 }
+        },
+        "defenseDamageDisplay": { "$ref": "#/$defs/ruleProvenance" },
+        "maxHp": { "type": "integer", "minimum": 1 },
+        "maxMp": { "type": "integer", "minimum": 0 },
+        "evasion": {
+          "type": "object",
+          "required": ["stab", "slash", "smash", "ranged", "magic"],
+          "additionalProperties": { "type": "number", "minimum": 0 }
+        },
+        "armor": { "type": "number", "minimum": 0 },
+        "resistance": {
+          "type": "object",
+          "required": ["water", "nature", "fire"],
+          "additionalProperties": { "type": "number", "minimum": 0 }
+        },
+        "tenacity": { "type": "number", "minimum": 0 },
+        "threat": { "type": "number", "minimum": 0 },
+        "enemiesPerEncounter": { "type": "integer", "minimum": 1 },
+        "abilities": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "required": ["hrid", "level", "nameZh"],
+            "properties": {
+              "hrid": { "type": "string", "minLength": 1 },
+              "level": { "type": "integer", "minimum": 1 },
+              "nameZh": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

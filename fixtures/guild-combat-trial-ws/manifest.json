@@ -1,0 +1,33 @@
+{
+  "protocolVersion": "draft-0",
+  "whitelistVersion": "unreviewed",
+  "description": "Guild combat trial WS fixtures — Phase 0B not started; no frames on disk.",
+  "phase0Gate": {
+    "phase0A": "required",
+    "phase0B": "blocked-until-whitelist-review",
+    "note": "Phase 0A memory discovery required before any write-to-disk capture."
+  },
+  "samples": {
+    "A": {
+      "label": "full-trial-lv100-to-end-no-refresh",
+      "status": "missing",
+      "purpose": "verified path, layer timing, endReason, calibrationDps"
+    },
+    "B": {
+      "label": "mid-trial-refresh-or-reconnect",
+      "status": "missing",
+      "purpose": "persistence recovery, observationGapMs"
+    },
+    "C": {
+      "label": "mid-install-or-in-progress-init",
+      "status": "missing",
+      "purpose": "Sequence C weak trialStartProvenance"
+    },
+    "D": {
+      "label": "dual-monster-layer",
+      "status": "missing",
+      "purpose": "multi-mMap fixture; may remain unknown if no badger week"
+    }
+  },
+  "frames": []
+}

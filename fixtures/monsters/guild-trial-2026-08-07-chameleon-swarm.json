@@ -1,0 +1,528 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "guild-trial-2026-08-07-chameleon-swarm",
+  "observedAt": "2026-08-07",
+  "source": {
+    "type": "weekly-trials-api-monster-panel",
+    "confidence": "displayed-values-from-adudu-sync",
+    "weekStartAt": "2026-08-07T00:00:00.000Z",
+    "capturedAt": "2026-08-07T01:18:53.508Z"
+  },
+  "rules": {
+    "durationSeconds": 3600,
+    "startLevel": 100,
+    "levelStepOnKill": 10,
+    "maxLevel": 300,
+    "monsterHpPerParticipantPercent": 1,
+    "repeatCount": 3,
+    "seeds": [
+      1297565953,
+      1297565954,
+      1297565955
+    ],
+    "observedTeamCapacity": 52,
+    "consumables": "disabled",
+    "passiveHpMpRegenFlatBonusPercent": 3,
+    "maxBlockRollsPerIncomingAttack": 5
+  },
+  "bosses": [
+    {
+      "hrid": "/guild_combat/chameleon",
+      "nameZh": "试炼变色龙",
+      "level": 100,
+      "combatStyle": "ranged",
+      "damageType": "physical",
+      "attackIntervalSeconds": 1.8,
+      "castSpeedPercent": 5,
+      "abilityHaste": 80,
+      "accuracy": {
+        "stab": 110,
+        "slash": 110,
+        "smash": 110,
+        "ranged": 505.99999999999994,
+        "magic": 110
+      },
+      "damage": {
+        "defensive": 110,
+        "stab": 10,
+        "slash": 10,
+        "smash": 10,
+        "ranged": 385,
+        "magic": 10
+      },
+      "maxHp": 550000,
+      "maxMp": 550000,
+      "evasion": {
+        "stab": 396,
+        "slash": 396,
+        "smash": 396,
+        "ranged": 517,
+        "magic": 616
+      },
+      "armor": 200,
+      "resistance": {
+        "water": 340,
+        "nature": 340,
+        "fire": 340
+      },
+      "tenacity": 3000,
+      "threat": 100,
+      "abilities": [
+        {
+          "hrid": "/abilities/critical_aura",
+          "level": 40,
+          "nameZh": "critical_aura"
+        },
+        {
+          "hrid": "/abilities/precision",
+          "level": 60,
+          "nameZh": "precision"
+        },
+        {
+          "hrid": "/abilities/penetrating_shot",
+          "level": 60,
+          "nameZh": "penetrating_shot"
+        },
+        {
+          "hrid": "/abilities/rain_of_arrows",
+          "level": 60,
+          "nameZh": "rain_of_arrows"
+        },
+        {
+          "hrid": "/abilities/steady_shot",
+          "level": 60,
+          "nameZh": "steady_shot"
+        }
+      ],
+      "enemiesPerEncounter": 1,
+      "enemyHrids": [
+        "/monsters/trial_chameleon"
+      ],
+      "enemies": [
+        {
+          "hrid": "/monsters/trial_chameleon",
+          "nameZh": "试炼变色龙",
+          "level": 100,
+          "combatStyle": "ranged",
+          "damageType": "physical",
+          "attackIntervalSeconds": 1.8,
+          "castSpeedPercent": 5,
+          "abilityHaste": 80,
+          "accuracy": {
+            "stab": 110,
+            "slash": 110,
+            "smash": 110,
+            "ranged": 505.99999999999994,
+            "magic": 110
+          },
+          "damage": {
+            "defensive": 110,
+            "stab": 10,
+            "slash": 10,
+            "smash": 10,
+            "ranged": 385,
+            "magic": 10
+          },
+          "maxHp": 550000,
+          "maxMp": 550000,
+          "evasion": {
+            "stab": 396,
+            "slash": 396,
+            "smash": 396,
+            "ranged": 517,
+            "magic": 616
+          },
+          "armor": 200,
+          "resistance": {
+            "water": 340,
+            "nature": 340,
+            "fire": 340
+          },
+          "tenacity": 3000,
+          "threat": 100,
+          "abilities": [
+            {
+              "hrid": "/abilities/critical_aura",
+              "level": 40,
+              "nameZh": "critical_aura"
+            },
+            {
+              "hrid": "/abilities/precision",
+              "level": 60,
+              "nameZh": "precision"
+            },
+            {
+              "hrid": "/abilities/penetrating_shot",
+              "level": 60,
+              "nameZh": "penetrating_shot"
+            },
+            {
+              "hrid": "/abilities/rain_of_arrows",
+              "level": 60,
+              "nameZh": "rain_of_arrows"
+            },
+            {
+              "hrid": "/abilities/steady_shot",
+              "level": 60,
+              "nameZh": "steady_shot"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "hrid": "/guild_combat/swarm",
+      "nameZh": "试炼虫群",
+      "level": 100,
+      "enemiesPerEncounter": 4,
+      "enemyHrids": [
+        "/monsters/trial_beetle",
+        "/monsters/trial_dragonfly",
+        "/monsters/trial_wasp",
+        "/monsters/trial_firefly"
+      ],
+      "enemies": [
+        {
+          "hrid": "/monsters/trial_beetle",
+          "nameZh": "试炼甲虫",
+          "level": 100,
+          "combatStyle": "smash",
+          "damageType": "physical",
+          "attackIntervalSeconds": 1.5,
+          "castSpeedPercent": 5,
+          "abilityHaste": 80,
+          "accuracy": {
+            "stab": 110,
+            "slash": 110,
+            "smash": 330,
+            "ranged": 110,
+            "magic": 110
+          },
+          "damage": {
+            "defensive": 110,
+            "stab": 110,
+            "slash": 110,
+            "smash": 165,
+            "ranged": 10,
+            "magic": 10
+          },
+          "maxHp": 220000,
+          "maxMp": 220000,
+          "evasion": {
+            "stab": 550,
+            "slash": 550,
+            "smash": 429,
+            "ranged": 550,
+            "magic": 429
+          },
+          "armor": 420,
+          "resistance": {
+            "water": 220,
+            "nature": 320,
+            "fire": 320
+          },
+          "tenacity": 3000,
+          "threat": 100,
+          "abilities": [
+            {
+              "hrid": "/abilities/invincible",
+              "level": 40,
+              "nameZh": "invincible"
+            },
+            {
+              "hrid": "/abilities/toughness",
+              "level": 60,
+              "nameZh": "toughness"
+            },
+            {
+              "hrid": "/abilities/fracturing_impact",
+              "level": 60,
+              "nameZh": "fracturing_impact"
+            },
+            {
+              "hrid": "/abilities/stunning_blow",
+              "level": 60,
+              "nameZh": "stunning_blow"
+            },
+            {
+              "hrid": "/abilities/sweep",
+              "level": 60,
+              "nameZh": "sweep"
+            }
+          ]
+        },
+        {
+          "hrid": "/monsters/trial_dragonfly",
+          "nameZh": "试炼蜻蜓",
+          "level": 100,
+          "combatStyle": "ranged",
+          "damageType": "physical",
+          "attackIntervalSeconds": 1.8,
+          "castSpeedPercent": 5,
+          "abilityHaste": 80,
+          "accuracy": {
+            "stab": 110,
+            "slash": 110,
+            "smash": 110,
+            "ranged": 505.99999999999994,
+            "magic": 110
+          },
+          "damage": {
+            "defensive": 110,
+            "stab": 10,
+            "slash": 10,
+            "smash": 10,
+            "ranged": 143,
+            "magic": 10
+          },
+          "maxHp": 220000,
+          "maxMp": 220000,
+          "evasion": {
+            "stab": 352,
+            "slash": 352,
+            "smash": 352,
+            "ranged": 473,
+            "magic": 616
+          },
+          "armor": 140,
+          "resistance": {
+            "water": 220,
+            "nature": 220,
+            "fire": 220
+          },
+          "tenacity": 3000,
+          "threat": 100,
+          "abilities": [
+            {
+              "hrid": "/abilities/critical_aura",
+              "level": 40,
+              "nameZh": "critical_aura"
+            },
+            {
+              "hrid": "/abilities/precision",
+              "level": 60,
+              "nameZh": "precision"
+            },
+            {
+              "hrid": "/abilities/steady_shot",
+              "level": 60,
+              "nameZh": "steady_shot"
+            },
+            {
+              "hrid": "/abilities/rain_of_arrows",
+              "level": 60,
+              "nameZh": "rain_of_arrows"
+            },
+            {
+              "hrid": "/abilities/pestilent_shot",
+              "level": 60,
+              "nameZh": "pestilent_shot"
+            }
+          ]
+        },
+        {
+          "hrid": "/monsters/trial_wasp",
+          "nameZh": "试炼黄蜂",
+          "level": 100,
+          "combatStyle": "stab",
+          "damageType": "physical",
+          "attackIntervalSeconds": 1.7,
+          "castSpeedPercent": 5,
+          "abilityHaste": 80,
+          "accuracy": {
+            "stab": 473,
+            "slash": 110,
+            "smash": 110,
+            "ranged": 110,
+            "magic": 110
+          },
+          "damage": {
+            "defensive": 110,
+            "stab": 132,
+            "slash": 110,
+            "smash": 110,
+            "ranged": 10,
+            "magic": 10
+          },
+          "maxHp": 220000,
+          "maxMp": 220000,
+          "evasion": {
+            "stab": 473,
+            "slash": 473,
+            "smash": 473,
+            "ranged": 605,
+            "magic": 352
+          },
+          "armor": 200,
+          "resistance": {
+            "water": 120,
+            "nature": 120,
+            "fire": 120
+          },
+          "tenacity": 3000,
+          "threat": 100,
+          "abilities": [
+            {
+              "hrid": "/abilities/fierce_aura",
+              "level": 40,
+              "nameZh": "fierce_aura"
+            },
+            {
+              "hrid": "/abilities/frenzy",
+              "level": 60,
+              "nameZh": "frenzy"
+            },
+            {
+              "hrid": "/abilities/penetrating_strike",
+              "level": 60,
+              "nameZh": "penetrating_strike"
+            },
+            {
+              "hrid": "/abilities/puncture",
+              "level": 60,
+              "nameZh": "puncture"
+            },
+            {
+              "hrid": "/abilities/impale",
+              "level": 60,
+              "nameZh": "impale"
+            }
+          ]
+        },
+        {
+          "hrid": "/monsters/trial_firefly",
+          "nameZh": "试炼萤火虫",
+          "level": 100,
+          "combatStyle": "magic",
+          "damageType": "fire",
+          "attackIntervalSeconds": 2,
+          "castSpeedPercent": 55,
+          "abilityHaste": 80,
+          "accuracy": {
+            "stab": 110,
+            "slash": 110,
+            "smash": 110,
+            "ranged": 110,
+            "magic": 462
+          },
+          "damage": {
+            "defensive": 110,
+            "stab": 10,
+            "slash": 10,
+            "smash": 10,
+            "ranged": 10,
+            "magic": 154
+          },
+          "maxHp": 220000,
+          "maxMp": 220000,
+          "evasion": {
+            "stab": 660,
+            "slash": 660,
+            "smash": 660,
+            "ranged": 352,
+            "magic": 473
+          },
+          "armor": 120,
+          "resistance": {
+            "water": 140,
+            "nature": 200,
+            "fire": 200
+          },
+          "tenacity": 3000,
+          "threat": 100,
+          "abilities": [
+            {
+              "hrid": "/abilities/mystic_aura",
+              "level": 40,
+              "nameZh": "mystic_aura"
+            },
+            {
+              "hrid": "/abilities/elemental_affinity",
+              "level": 60,
+              "nameZh": "elemental_affinity"
+            },
+            {
+              "hrid": "/abilities/firestorm",
+              "level": 60,
+              "nameZh": "firestorm"
+            },
+            {
+              "hrid": "/abilities/smoke_burst",
+              "level": 60,
+              "nameZh": "smoke_burst"
+            },
+            {
+              "hrid": "/abilities/fireball",
+              "level": 60,
+              "nameZh": "fireball"
+            }
+          ]
+        }
+      ],
+      "combatStyle": "smash",
+      "damageType": "physical",
+      "attackIntervalSeconds": 1.5,
+      "castSpeedPercent": 5,
+      "abilityHaste": 80,
+      "accuracy": {
+        "stab": 110,
+        "slash": 110,
+        "smash": 330,
+        "ranged": 110,
+        "magic": 110
+      },
+      "damage": {
+        "defensive": 110,
+        "stab": 110,
+        "slash": 110,
+        "smash": 165,
+        "ranged": 10,
+        "magic": 10
+      },
+      "maxHp": 880000,
+      "maxMp": 880000,
+      "evasion": {
+        "stab": 550,
+        "slash": 550,
+        "smash": 429,
+        "ranged": 550,
+        "magic": 429
+      },
+      "armor": 420,
+      "resistance": {
+        "water": 220,
+        "nature": 320,
+        "fire": 320
+      },
+      "tenacity": 3000,
+      "threat": 100,
+      "abilities": [
+        {
+          "hrid": "/abilities/invincible",
+          "level": 40,
+          "nameZh": "invincible"
+        },
+        {
+          "hrid": "/abilities/toughness",
+          "level": 60,
+          "nameZh": "toughness"
+        },
+        {
+          "hrid": "/abilities/fracturing_impact",
+          "level": 60,
+          "nameZh": "fracturing_impact"
+        },
+        {
+          "hrid": "/abilities/stunning_blow",
+          "level": 60,
+          "nameZh": "stunning_blow"
+        },
+        {
+          "hrid": "/abilities/sweep",
+          "level": 60,
+          "nameZh": "sweep"
+        }
+      ]
+    }
+  ]
+}

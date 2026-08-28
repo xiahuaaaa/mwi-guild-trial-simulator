@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MWI 公会试炼模拟器</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">MWI GUILD TRIAL · 2026-07-24</p>
+          <h1>双 Boss 分队模拟器</h1>
+          <p>本期试炼水母与试炼刺猬的报名、覆盖检查及方案对比。</p>
+        </div>
+        <button id="import-members" class="primary">导入成员快照</button>
+      </header>
+
+      <section class="warning" aria-label="待验证规则">
+        <strong>⚠ 模拟尚未可用：</strong> Boss 成长、光环/减益叠加、转场状态与治疗回复倍率仍为 unknown，当前页面只展示已确认的面板数据和方案占位。
+      </section>
+
+      <section class="boss-grid" aria-label="本期 Boss">
+        <article class="boss-card jellyfish">
+          <div class="card-title"><h2>试炼水母</h2><span>Lv.100 · 水系魔法</span></div>
+          <dl><div><dt>HP / MP</dt><dd>495K / 495K</dd></div><div><dt>魔法伤害</dt><dd>352</dd></div><div><dt>弱点候选</dt><dd>自然抗性 160</dd></div><div><dt>关键闪避</dt><dd>远程 396 · 魔法 517</dd></div></dl>
+          <p class="note">需要实测元素光环与元素增幅的团队影响。</p>
+        </article>
+        <article class="boss-card hedgehog">
+          <div class="card-title"><h2>试炼刺猬</h2><span>Lv.100 · 自然魔法</span></div>
+          <dl><div><dt>HP / MP</dt><dd>440K / 440K</dd></div><div><dt>魔法 / 防御伤害</dt><dd>286 / 286</dd></div><div><dt>弱点候选</dt><dd>火抗性 160</dd></div><div><dt>关键闪避</dt><dd>全类型 495</dd></div></dl>
+          <p class="note">尖刺防护和守护光环可能改变生存与输出排序。</p>
+        </article>
+      </section>
+
+      <section class="panel import-panel">
+        <div><h2>成员快照</h2><p id="import-status">未导入。支持未来接入公会助手或本地 JSON 导出。</p></div>
+        <label class="secondary" for="member-file">选择 JSON<input id="member-file" type="file" accept="application/json" hidden /></label>
+      </section>
+
+      <section class="panel">
+        <div class="tabs" role="tablist" aria-label="分队方案">
+          <button class="tab active" role="tab" aria-selected="true" data-plan="balanced">均衡</button>
+          <button class="tab" role="tab" aria-selected="false" data-plan="robust">稳健</button>
+          <button class="tab" role="tab" aria-selected="false" data-plan="push">冲层</button>
+        </div>
+        <div id="plan-content" class="plan-content"></div>
+      </section>
+
+      <section class="coverage-grid" aria-label="团队覆盖">
+        <article class="panel coverage"><h2>水母队 Coverage</h2><ul id="jellyfish-coverage"></ul></article>
+        <article class="panel coverage"><h2>刺猬队 Coverage</h2><ul id="hedgehog-coverage"></ul></article>
+      </section>
+    </main>
+    <template id="plan-template"><div class="plan-copy"><h2></h2><p></p></div><div class="roster"></div></template>
+    <script src="./src/app.js"></script>
+  </body>
+</html>

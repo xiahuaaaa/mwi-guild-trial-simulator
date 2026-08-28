@@ -1,0 +1,34 @@
+# Runtime secrets and local databases — never publish
+.local/
+.env
+.env.*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+admin-key.env
+*webhook-secret*
+*.pem
+
+# Member snapshots, QQ bindings, assignment backups — private repo only
+backups/
+
+# Generated reports (member names, loadouts, PNGs)
+artifacts/
+
+# Internal ops docs (production paths, Tailscale, QQ IDs)
+CLAUDE_CODE_HANDOFF.md
+TESTING_AND_DEPLOYMENT.md
+
+# Logs / OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+
+# Coverage / editor
+coverage/
+.nyc_output/
+*.swp

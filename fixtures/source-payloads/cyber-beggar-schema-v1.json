@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "scriptVersion": "0.6.14",
+  "capturedAt": "2026-07-24T12:00:00.000Z",
+  "character": {
+    "id": 100002,
+    "name": "FixtureTank",
+    "guildId": 9001
+  },
+  "guild": {
+    "id": 9001,
+    "name": "FixtureGuild"
+  },
+  "skills": {
+    "/skills/stamina": { "level": 130 }
+  },
+  "abilities": {
+    "/abilities/fierce_aura": { "level": 40 }
+  },
+  "equipment": [
+    {
+      "locationHrid": "/item_locations/equipment/two_hand",
+      "itemHrid": "/items/fixture_guardian_staff",
+      "enhancementLevel": 12
+    }
+  ]
+}

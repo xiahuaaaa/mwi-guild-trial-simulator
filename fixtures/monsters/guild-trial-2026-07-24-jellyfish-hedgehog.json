@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "guild-trial-2026-07-24-jellyfish-hedgehog",
+  "observedAt": "2026-07-24",
+  "source": {
+    "type": "user-supplied-game-screenshots",
+    "confidence": "displayed-values-confirmed"
+  },
+  "rules": {
+    "durationSeconds": 3600,
+    "startLevel": 100,
+    "levelStepOnKill": 10,
+    "maxLevel": 300,
+    "monsterHpPerParticipantPercent": 1,
+    "repeatCount": 3,
+    "seeds": [1297565953, 1297565954, 1297565955],
+    "membersInCurrentAssignment": 40,
+    "observedTeamCapacity": 48,
+    "consumables": "disabled",
+    "passiveHpMpRegenFlatBonusPercent": 3,
+    "passiveRegenScope": "regen_tick_hp_mp_additive",
+    "maxBlockRollsPerIncomingAttack": 5,
+    "scalingPolicy": {
+      "id": "guild-trial-level-plus-10-over-110-v1",
+      "status": "confirmed",
+      "source": "2026-07-28-jellyfish-floor15-47p-screenshot"
+    },
+    "transitionPolicy": {
+      "spawnDelayMs": null,
+      "playerHp": "full",
+      "playerMp": "full",
+      "cooldowns": "unknown",
+      "buffs": "unknown",
+      "debuffs": "unknown",
+      "shields": "unknown",
+      "casts": "unknown"
+    },
+    "combatPolicy": {
+      "consumables": "disabled",
+      "passiveRegenFlatBonus": 0.03,
+      "passiveRegenScope": "regen_tick_hp_mp_additive",
+      "passiveRegenRounding": "unknown",
+      "maxBlockRollsPerIncomingAttack": 5,
+      "healingMultiplier": "unknown",
+      "lifeStealMultiplier": "unknown",
+      "manaLeechMultiplier": "unknown",
+      "deathBehavior": "unknown",
+      "allDeadBehavior": "unknown",
+      "targetPolicy": "unknown"
+    }
+  },
+  "bosses": [
+    {
+      "hrid": "/guild_combat/jellyfish",
+      "nameZh": "试炼水母",
+      "level": 100,
+      "combatStyle": "magic",
+      "damageType": "water",
+      "attackIntervalSeconds": 1.9,
+      "castSpeedPercent": 55,
+      "abilityHaste": 80,
+      "accuracy": {
+        "magic": 418
+      },
+      "damage": {
+        "magic": 352
+      },
+      "defenseDamageDisplay": {
+        "status": "unknown",
+        "value": 110,
+        "source": null,
+        "note": "Tooltip value is confirmed; upstream DTO field mapping is not."
+      },
+      "maxHp": 495000,
+      "maxMp": 495000,
+      "evasion": {
+        "stab": 770,
+        "slash": 770,
+        "smash": 770,
+        "ranged": 396,
+        "magic": 517
+      },
+      "armor": 200,
+      "resistance": {
+        "water": 280,
+        "nature": 160,
+        "fire": 280
+      },
+      "tenacity": 3000,
+      "threat": 100,
+      "abilities": [
+        { "hrid": "/abilities/mystic_aura", "level": 40, "nameZh": "元素光环" },
+        { "hrid": "/abilities/elemental_affinity", "level": 60, "nameZh": "元素增幅" },
+        { "hrid": "/abilities/frost_surge", "level": 60, "nameZh": "冰霜爆裂" },
+        { "hrid": "/abilities/mana_spring", "level": 60, "nameZh": "法力喷泉" },
+        { "hrid": "/abilities/water_strike", "level": 60, "nameZh": "流水冲击" }
+      ]
+    },
+    {
+      "hrid": "/guild_combat/hedgehog",
+      "nameZh": "试炼刺猬",
+      "level": 100,
+      "combatStyle": "magic",
+      "damageType": "nature",
+      "attackIntervalSeconds": 1.9,
+      "castSpeedPercent": 55,
+      "abilityHaste": 80,
+      "accuracy": {
+        "magic": 418
+      },
+      "damage": {
+        "magic": 286
+      },
+      "defenseDamageDisplay": {
+        "status": "unknown",
+        "value": 286,
+        "source": null,
+        "note": "Tooltip value is confirmed; upstream DTO field mapping is not."
+      },
+      "maxHp": 440000,
+      "maxMp": 440000,
+      "evasion": {
+        "stab": 495,
+        "slash": 495,
+        "smash": 495,
+        "ranged": 495,
+        "magic": 495
+      },
+      "armor": 270,
+      "resistance": {
+        "water": 270,
+        "nature": 270,
+        "fire": 160
+      },
+      "tenacity": 5000,
+      "threat": 100,
+      "abilities": [
+        { "hrid": "/abilities/guardian_aura", "level": 40, "nameZh": "守护光环" },
+        { "hrid": "/abilities/toughness", "level": 60, "nameZh": "坚韧" },
+        { "hrid": "/abilities/spike_shell", "level": 60, "nameZh": "尖刺防护" },
+        { "hrid": "/abilities/natures_veil", "level": 60, "nameZh": "自然菌幕" },
+        { "hrid": "/abilities/fracturing_impact", "level": 60, "nameZh": "碎裂冲击" }
+      ]
+    }
+  ],
+  "validationNeeded": [
+    "confirm-defense-damage-display-field-mapping",
+    "capture-level-110-and-120-non-hp-panels-for-both-bosses",
+    "confirm-non-hp-mp-transition-state",
+    "confirm-boss-ability-scaling",
+    "confirm-aura-and-debuff-stacking",
+    "confirm-passive-regen-rounding-order"
+  ]
+}

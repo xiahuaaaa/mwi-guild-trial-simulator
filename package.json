@@ -1,0 +1,19 @@
+{
+  "name": "mwi-guild-trial-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "node scripts/test-all.mjs",
+    "test:contracts": "node --test tests/contracts/*.test.mjs",
+    "test:adapter": "node --test packages/mwi-adapter/tests/*.test.ts",
+    "test:optimizer": "node --test packages/optimizer/tests/*.test.ts",
+    "test:web": "node --test apps/web/tests/*.test.js workers/simulator/tests/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

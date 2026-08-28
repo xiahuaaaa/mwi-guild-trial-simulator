@@ -1,0 +1,76 @@
+{
+  "snapshot": {
+    "schemaVersion": 1,
+    "scriptVersion": "1.13.1",
+    "capturedAt": "2026-07-24T12:00:00.000Z",
+    "character": {
+      "characterId": 100001,
+      "characterName": "FixtureMage",
+      "guildId": 9001
+    },
+    "skills": {
+      "/skills/magic": 140,
+      "/skills/stamina": 115
+    },
+    "learnedAbilities": [
+      { "abilityHrid": "/abilities/fireball", "level": 60 },
+      { "abilityHrid": "/abilities/mystic_aura", "level": 40 }
+    ],
+    "auras": {
+      "/abilities/mystic_aura": 40
+    },
+    "equipment": [
+      {
+        "locationHrid": "/item_locations/equipment/two_hand",
+        "itemHrid": "/items/unapproved_fixture_staff",
+        "enhancementLevel": 20
+      }
+    ],
+    "abilities": [
+      {
+        "slot": 0,
+        "abilityHrid": "/abilities/fireball",
+        "level": 60,
+        "triggers": [
+          {
+            "dependencyHrid": "/combat_trigger_dependencies/self",
+            "conditionHrid": "/combat_trigger_conditions/always",
+            "comparatorHrid": "/combat_trigger_comparators/is_active",
+            "value": 0
+          }
+        ]
+      }
+    ]
+  },
+  "trialBuilds": [
+    {
+      "capturedAt": "2026-07-24T12:00:00.000Z",
+      "trialBuild": {
+        "loadoutId": 701,
+        "name": "Fixture fire build",
+        "equipment": [
+          {
+            "locationHrid": "/item_locations/equipment/two_hand",
+            "itemHrid": "/items/blazing_trident",
+            "enhancementLevel": 15
+          }
+        ],
+        "abilities": [
+          {
+            "slot": 0,
+            "abilityHrid": "/abilities/fireball",
+            "level": 60,
+            "triggers": [
+              {
+                "dependencyHrid": "/combat_trigger_dependencies/self",
+                "conditionHrid": "/combat_trigger_conditions/always",
+                "comparatorHrid": "/combat_trigger_comparators/is_active",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

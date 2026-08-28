@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mwi.local/schemas/guild-trial-scenario.schema.json",
+  "title": "MWI Guild Trial scenario",
+  "description": "Runtime invariants are also enforced by src/runtime.mjs. All unresolved policies require explicit unknown provenance.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "gameBuild",
+    "scenarioId",
+    "durationMs",
+    "startMonsterLevel",
+    "levelStep",
+    "maxMonsterLevel",
+    "monsterHpPerParticipant",
+    "repeatCount",
+    "seeds",
+    "monster",
+    "members",
+    "guildModifiers",
+    "scalingPolicy",
+    "transitionPolicy",
+    "combatPolicy",
+    "policyProvenance",
+    "assumptionWarnings"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "gameBuild": { "type": "string", "minLength": 1 },
+    "scenarioId": { "type": "string", "minLength": 1 },
+    "durationMs": { "const": 3600000 },
+    "startMonsterLevel": { "const": 100 },
+    "levelStep": { "const": 10 },
+    "maxMonsterLevel": { "const": 300 },
+    "monsterHpPerParticipant": { "const": 0.01 },
+    "repeatCount": { "const": 3 },
+    "seeds": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+    },
+    "monster": { "type": "object" },
+    "members": { "type": "array" },
+    "guildModifiers": { "type": "array" },
+    "scalingPolicy": {
+      "type": "object",
+      "required": ["id", "status", "source"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["confirmed", "assumed", "unknown"] },
+        "source": { "type": ["string", "null"] }
+      }
+    },
+    "transitionPolicy": { "type": "object" },
+    "combatPolicy": { "type": "object" },
+    "policyProvenance": {
+      "type": "object",
+      "minProperties": 17,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status", "value", "source"],
+        "properties": {
+          "status": { "enum": ["confirmed", "assumed", "unknown"] },
+          "value": {},
+          "source": { "type": ["string", "null"] },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "assumptionWarnings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "additionalProperties": false
+}

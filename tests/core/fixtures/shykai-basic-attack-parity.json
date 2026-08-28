@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "shykai-combat-utilities-basic-attack-v1",
+  "provenance": {
+    "deployment": "https://shykai.github.io/MWICombatSimulatorTest/dist/src_worker_js.bundle.js.map",
+    "sourceMapSha256": "c8b71b5d3a217dd97ccae9003cf604961bfc6fdec1715941165aa9805117dce5",
+    "module": "src/combatsimulator/combatUtilities.js",
+    "moduleSha256": "806c4e64153a590c918dfccd9c6e8abf5ae3aaf92ff57cb232a8746cd580ca12",
+    "oracle": "unmodified recovered CombatUtilities.processAttack with Math.random replaced by the listed sequence"
+  },
+  "source": {
+    "isWeakened": false,
+    "weakenPercentage": 0,
+    "combatDetails": {
+      "currentHitpoints": 1000,
+      "maxHitpoints": 1000,
+      "accuracyRating": 150,
+      "maxDamage": 120,
+      "evasionRating": 100,
+      "totalArmor": 20,
+      "totalWaterResistance": 0,
+      "totalNatureResistance": 0,
+      "totalFireResistance": 0,
+      "combatStats": {
+        "combatStyleHrid": "/combat_styles/smash",
+        "damageType": "/damage_types/physical",
+        "physicalAmplify": 0.1,
+        "waterAmplify": 0,
+        "natureAmplify": 0,
+        "fireAmplify": 0,
+        "armorPenetration": 0.25,
+        "waterPenetration": 0,
+        "naturePenetration": 0,
+        "firePenetration": 0,
+        "criticalRate": 0.05,
+        "criticalDamage": 0.5,
+        "taskDamage": 0.2,
+        "damageTaken": 0,
+        "autoAttackDamage": 0.15,
+        "abilityDamage": 0,
+        "physicalThorns": 0,
+        "elementalThorns": 0,
+        "retaliation": 0,
+        "lifeSteal": 0,
+        "manaLeech": 0
+      }
+    }
+  },
+  "target": {
+    "isWeakened": false,
+    "weakenPercentage": 0,
+    "combatDetails": {
+      "currentHitpoints": 2000,
+      "maxHitpoints": 2000,
+      "accuracyRating": 150,
+      "maxDamage": 120,
+      "evasionRating": 100,
+      "totalArmor": 50,
+      "totalWaterResistance": 0,
+      "totalNatureResistance": 0,
+      "totalFireResistance": 0,
+      "combatStats": {
+        "combatStyleHrid": "/combat_styles/smash",
+        "damageType": "/damage_types/physical",
+        "physicalAmplify": 0.1,
+        "waterAmplify": 0,
+        "natureAmplify": 0,
+        "fireAmplify": 0,
+        "armorPenetration": 0.25,
+        "waterPenetration": 0,
+        "naturePenetration": 0,
+        "firePenetration": 0,
+        "criticalRate": 0.05,
+        "criticalDamage": 0.5,
+        "taskDamage": 0.2,
+        "damageTaken": 0.1,
+        "autoAttackDamage": 0.15,
+        "abilityDamage": 0,
+        "physicalThorns": 0,
+        "elementalThorns": 0,
+        "retaliation": 0,
+        "lifeSteal": 0,
+        "manaLeech": 0
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "non-critical-hit",
+      "randomFloats": [0.9, 0.5, 0.25, 0.1],
+      "expected": {
+        "damageDone": 37,
+        "didHit": true,
+        "isCrit": false,
+        "targetHitpoints": 1963,
+        "randomDrawCount": 4
+      }
+    },
+    {
+      "name": "critical-hit",
+      "randomFloats": [0.01, 0.2, 0.1],
+      "expected": {
+        "damageDone": 215,
+        "didHit": true,
+        "isCrit": true,
+        "targetHitpoints": 1785,
+        "randomDrawCount": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "importedAt": "2026-07-24T10:34:07.653Z",
+  "manifestSha256": "b6a9d487aee8a51acdd5d282cafb2755086739258cb3ee4eba8f936dce210d95",
+  "artifacts": [
+    {
+      "file": "bundle.js.map",
+      "url": "https://shykai.github.io/MWICombatSimulatorTest/dist/bundle.js.map",
+      "sha256": "a2ce8165ff0515e3e3ec1695502b6aa16fb3acae8a72970eaf92a8c1811c4388",
+      "sourcesRecovered": 18,
+      "sourceModulesVerified": 0
+    },
+    {
+      "file": "src_worker_js.bundle.js.map",
+      "url": "https://shykai.github.io/MWICombatSimulatorTest/dist/src_worker_js.bundle.js.map",
+      "sha256": "c8b71b5d3a217dd97ccae9003cf604961bfc6fdec1715941165aa9805117dce5",
+      "sourcesRecovered": 37,
+      "sourceModulesVerified": 6
+    },
+    {
+      "file": "src_multiWorker_js-_004d0.bundle.js.map",
+      "url": "https://shykai.github.io/MWICombatSimulatorTest/dist/src_multiWorker_js-_004d0.bundle.js.map",
+      "sha256": "a80f68172a2f9351d02d149d54fc2b5b9812a438f87ebe2d6552c2a758d3bd5c",
+      "sourcesRecovered": 7,
+      "sourceModulesVerified": 0
+    },
+    {
+      "file": "LICENSE",
+      "url": "https://raw.githubusercontent.com/shykai/MWICombatSimulatorTest/main/LICENSE",
+      "sha256": "6821d0c99790a16a45ca4004f4938d833aaab82c5926f97225c17cfa4d8d9ca6",
+      "sourcesRecovered": 0,
+      "sourceModulesVerified": 0
+    }
+  ],
+  "soloSim": {
+    "savedPageSha256": "462fbd8dba11d264872c61205603858ca143c2f8131897ca25e4e94a919ff71d",
+    "recoveredCodeSha256": "c55d7fc5edd1ee48f7dcc33b16a81402216c45da93ded35358cf80eaeb4d60f9",
+    "installArtifactSha256": "5b7e32308bea3691dcd591771dd9e69d76a44e53da8cd0c98e8eb45856bbee86",
+    "copied": false
+  }
+}
