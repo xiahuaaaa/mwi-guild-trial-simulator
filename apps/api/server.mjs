@@ -644,6 +644,39 @@ function initialize(db) {
   ensureColumn("members", "active", "INTEGER NOT NULL DEFAULT 1");
 }
 
+/**
+ * Ensure every registered public-ingest guild and its configured reporters
+ * exist so the first roster sync is not blocked on a prior admin PUT.
+ * Existing rows are left unchanged (including inactive reporters pruned by a
+ * later roster sync).
+ */
+function ensureRegisteredGuilds(db, guildRegistry) {
+  const timestamp = now();
+  const insertGuild = db.prepare(`
+    INSERT INTO guilds (id, name, created_at, game_guild_id)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(id) DO NOTHING
+  `);
+  const insertMember = db.prepare(`
+    INSERT INTO members (guild_id, member_id, display_name, member_token, created_at, updated_at, active)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+    ON CONFLICT(guild_id, member_id) DO NOTHING
+  `);
+  for (const guild of guildRegistry.values()) {
+    insertGuild.run(guild.slug, guild.displayName, timestamp, guild.gameGuildId);
+    for (const memberId of guild.reporters) {
+      insertMember.run(
+        guild.slug,
+        memberId,
+        memberId,
+        hashMemberToken(randomBytes(32).toString("base64url")),
+        timestamp,
+        timestamp,
+      );
+    }
+  }
+}
+
 function parseCsvSet(value) {
   return new Set(
     String(value ?? "")
@@ -864,6 +897,7 @@ export async function createGuildApi(options = {}) {
     DEFAULT_TEST_REPORT_DIR;
   const db = new DatabaseSync(dbPath);
   initialize(db);
+  ensureRegisteredGuilds(db, guildRegistry);
 
   const requireNapcatQrAccess = (req, url) => {
     if (!napcatQrToken) {
@@ -1014,9 +1048,6 @@ export async function createGuildApi(options = {}) {
         if (!guildConfig.reporters.has(roster.reporter.memberId)) {
           throw fail(403, "roster_reporter_not_allowed", "this character is not allowed to synchronize the TMD roster");
         }
-        const reporter = db.prepare("SELECT 1 FROM members WHERE guild_id = ? AND member_id = ? AND active = 1").get(guildId, roster.reporter.memberId);
-        if (!reporter) throw fail(403, "roster_reporter_not_registered", "roster reporter is not an active TMD member");
-        if (!guildExists(guildId)) throw fail(404, "guild_not_found", "TMD guild is not configured");
         assertPinnedGameGuildId(guildConfig, roster.guild.id);
         checkPublicUploadRate(req, `roster:${roster.reporter.memberId}`, 2);
         const activeCount = Number(db.prepare("SELECT COUNT(*) AS count FROM members WHERE guild_id = ? AND active = 1").get(guildId).count);
@@ -1026,7 +1057,11 @@ export async function createGuildApi(options = {}) {
         const timestamp = now();
         db.exec("BEGIN IMMEDIATE");
         try {
-          db.prepare("UPDATE guilds SET name = ?, game_guild_id = ? WHERE id = ?").run(guildConfig.gameGuildName, roster.guild.id, guildId);
+          db.prepare(`
+            INSERT INTO guilds (id, name, created_at, game_guild_id)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET name = excluded.name, game_guild_id = excluded.game_guild_id
+          `).run(guildId, guildConfig.gameGuildName, timestamp, roster.guild.id);
           db.prepare("UPDATE members SET active = 0 WHERE guild_id = ?").run(guildId);
           const upsert = db.prepare(`
             INSERT INTO members (guild_id, member_id, display_name, member_token, created_at, updated_at, game_player_id, guild_role, status, active)
@@ -1199,11 +1234,12 @@ export async function createGuildApi(options = {}) {
         const memberId = safeId(parts[5], "memberId");
         const member = db.prepare("SELECT display_name FROM members WHERE guild_id = ? AND member_id = ? AND active = 1").get(guildId, memberId);
         if (req.method === "GET" && parts[6] === "eligibility" && parts.length === 7) {
+          const isReporter = guildConfig.reporters.has(memberId);
           return json(res, 200, {
             guildId,
             memberId,
-            eligible: Boolean(member),
-            rosterSyncAllowed: Boolean(member) && guildConfig.reporters.has(memberId),
+            eligible: Boolean(member) || isReporter,
+            rosterSyncAllowed: isReporter,
           });
         }
         if (req.method === "POST" && parts[6] === "snapshots" && parts.length === 7) {

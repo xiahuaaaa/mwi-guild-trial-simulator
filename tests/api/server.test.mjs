@@ -128,8 +128,10 @@ test("TMD public uploader accepts roster members without a token and rate limits
   const eligible = await request("/api/public/guilds/TMD/members/adudu/eligibility");
   assert.equal(eligible.response.status, 200);
   assert.equal(eligible.body.eligible, true);
+  assert.equal(eligible.body.rosterSyncAllowed, true);
   const outsider = await request("/api/public/guilds/TMD/members/outsider/eligibility");
   assert.equal(outsider.body.eligible, false);
+  assert.equal(outsider.body.rosterSyncAllowed, false);
 
   const publicSnapshot = snapshot({
     guildId: "TMD",
@@ -241,6 +243,40 @@ test("unregistered public ingest slug returns 404", async (t) => {
     body: { guild: { id: 667, name: "Wandering ICarus" } },
   });
   assert.equal(weeklyResult.response.status, 404);
+});
+
+test("WI reporters are eligible and can bootstrap roster without a prior admin member", async (t) => {
+  const { request, db } = await harness(t);
+  const eligibility = await request("/api/public/guilds/WI/members/adiudiu/eligibility");
+  assert.equal(eligibility.response.status, 200);
+  assert.equal(eligibility.body.eligible, true);
+  assert.equal(eligibility.body.rosterSyncAllowed, true);
+
+  const outsider = await request("/api/public/guilds/WI/members/not-in-wi/eligibility");
+  assert.equal(outsider.body.eligible, false);
+  assert.equal(outsider.body.rosterSyncAllowed, false);
+
+  db.prepare("UPDATE members SET active = 0 WHERE guild_id = 'WI'").run();
+  const afterPrune = await request("/api/public/guilds/WI/members/adiudiu/eligibility");
+  assert.equal(afterPrune.body.eligible, true);
+  assert.equal(afterPrune.body.rosterSyncAllowed, true);
+
+  const roster = {
+    guild: { id: 667, name: "Wandering ICarus" },
+    reporter: { playerId: 219761, memberId: "adiudiu" },
+    members: [
+      { playerId: 219761, memberId: "adiudiu", status: "ACTIVE", guildRole: "MEMBER" },
+      { playerId: 2, memberId: "erdols", status: "ACTIVE", guildRole: "LEADER" },
+    ],
+    capturedAt: "2026-08-28T00:00:00.000Z",
+  };
+  const synced = await request("/api/public/guilds/WI/roster", { method: "POST", body: roster });
+  assert.equal(synced.response.status, 200);
+  assert.equal(synced.body.memberCount, 2);
+
+  const restored = await request("/api/public/guilds/WI/members/erdols/eligibility");
+  assert.equal(restored.body.eligible, true);
+  assert.equal(restored.body.rosterSyncAllowed, true);
 });
 
 test("WI public ingest succeeds and does not mutate TMD rows", async (t) => {
