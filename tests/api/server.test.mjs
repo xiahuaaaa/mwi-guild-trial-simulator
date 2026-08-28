@@ -890,6 +890,52 @@ test("member userscript is served from the public API origin without caching", a
   assert.equal(await response.text(), source);
 });
 
+test("public guild routes allow CORS from MWI game origins for iOS Focus fetch", async (t) => {
+  const api = await createGuildApi({ adminKey: "test-admin-key", fixture, dbPath: ":memory:" });
+  await new Promise((resolve) => api.server.listen(0, "127.0.0.1", resolve));
+  t.after(() => api.close());
+  const address = api.server.address();
+  const base = `http://127.0.0.1:${address.port}`;
+  const eligibility = `${base}/api/public/guilds/TMD/members/adudu/eligibility`;
+  const gameOrigin = "https://www.milkywayidlecn.com";
+
+  const preflight = await fetch(eligibility, {
+    method: "OPTIONS",
+    headers: {
+      origin: gameOrigin,
+      "access-control-request-method": "POST",
+      "access-control-request-headers": "content-type",
+    },
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), gameOrigin);
+  assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /POST/);
+  assert.match(preflight.headers.get("access-control-allow-headers") ?? "", /content-type/i);
+  assert.equal(await preflight.text(), "");
+
+  const allowed = await fetch(eligibility, { headers: { origin: gameOrigin } });
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("access-control-allow-origin"), gameOrigin);
+
+  const intl = await fetch(eligibility, { headers: { origin: "https://test.milkywayidle.com" } });
+  assert.equal(intl.headers.get("access-control-allow-origin"), "https://test.milkywayidle.com");
+
+  const blocked = await fetch(eligibility, { headers: { origin: "https://evil.example" } });
+  assert.equal(blocked.status, 200);
+  assert.equal(blocked.headers.get("access-control-allow-origin"), null);
+
+  const httpOrigin = await fetch(eligibility, { headers: { origin: "http://www.milkywayidle.com" } });
+  assert.equal(httpOrigin.headers.get("access-control-allow-origin"), null);
+
+  const snapshotResponse = await fetch(`${base}/api/public/guilds/TMD/members/outsider/snapshots`, {
+    method: "POST",
+    headers: { origin: gameOrigin, "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(snapshotResponse.status, 403);
+  assert.equal(snapshotResponse.headers.get("access-control-allow-origin"), gameOrigin);
+});
+
 test("sensitive snapshot fields are rejected rather than persisted", async (t) => {
   const { request } = await harness(t);
   const result = await request("/api/guilds/guild-1/members/member-1/snapshots", { method: "POST", headers: { authorization: "Bearer member-secret" }, body: snapshot({ discordToken: "must-not-store" }) });

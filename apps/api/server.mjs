@@ -822,8 +822,40 @@ function matchesMemberToken(value, stored) {
   } catch { return false; }
 }
 
+const corsOriginByResponse = new WeakMap();
+
+function allowedGameOrigin(req) {
+  const origin = String(req.headers.origin ?? "").trim();
+  if (!origin) return null;
+  let parsed;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) return null;
+  if (parsed.port && parsed.port !== "443") return null;
+  const host = parsed.hostname.toLowerCase();
+  if (host === "www.milkywayidlecn.com") return origin;
+  if (host === "milkywayidle.com" || host.endsWith(".milkywayidle.com")) return origin;
+  return null;
+}
+
+function isBrowserPublicPath(pathname) {
+  return pathname === "/health" || pathname.startsWith("/api/public/");
+}
+
 function json(res, status, payload) {
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+  const headers = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+  };
+  const origin = corsOriginByResponse.get(res);
+  if (origin) {
+    headers["access-control-allow-origin"] = origin;
+    headers.vary = "origin";
+  }
+  res.writeHead(status, headers);
   res.end(JSON.stringify(payload));
 }
 
@@ -989,6 +1021,23 @@ export async function createGuildApi(options = {}) {
     try {
       const url = new URL(req.url, "http://localhost");
       const parts = url.pathname.split("/").filter(Boolean).map(decode);
+      if (isBrowserPublicPath(url.pathname)) {
+        const origin = allowedGameOrigin(req);
+        if (origin) corsOriginByResponse.set(res, origin);
+        if (req.method === "OPTIONS") {
+          const headers = {
+            "access-control-allow-methods": "GET, POST, OPTIONS",
+            "access-control-allow-headers": "content-type",
+            "access-control-max-age": "86400",
+          };
+          if (origin) {
+            headers["access-control-allow-origin"] = origin;
+            headers.vary = "origin";
+          }
+          res.writeHead(204, headers);
+          return res.end();
+        }
+      }
       if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, service: "mwi-guild-api", simulationEngine: "unavailable" });
       if (url.pathname === "/napcat-qr" || url.pathname === "/napcat-qr.png" || url.pathname === "/napcat-qr/refresh") {
         const access = requireNapcatQrAccess(req, url);

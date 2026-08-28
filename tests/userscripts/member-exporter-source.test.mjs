@@ -46,11 +46,12 @@ test("page bridge normalizes real MWI wearable and ability maps", () => {
 });
 
 test("member exporter is a zero-configuration TMD uploader", () => {
-  assert.match(source, /@version\s+0\.6\.20/);
+  assert.match(source, /@version\s+0\.6\.21/);
   assert.match(source, /@name\s+TMD-guild-trial-sync/);
   assert.match(source, /@name:en\s+TMD-guild-trial-sync/);
   assert.match(source, /@match\s+https:\/\/www\.milkywayidlecn\.com\/\*/);
   assert.match(source, /@connect\s+adudu\.tailab136f\.ts\.net/);
+  assert.match(source, /@grant\s+GM\.xmlHttpRequest/);
   assert.match(source, /DEFAULT_API_BASE = "https:\/\/adudu\.tailab136f\.ts\.net"/);
   assert.match(source, /GUILD_IDENTITY = Object\.freeze\(\{\s*apiSlug: "TMD",\s*gameGuildName: "TMD",\s*gameGuildId: 369,/);
   assert.match(source, /detectedMemberId\(\)/);
@@ -366,4 +367,14 @@ test("member exporter merges every equipment source and resolves the highest own
   assert.doesNotMatch(source, /level < item\.enhancementLevel/);
   assert.match(source, /\.slice\(0, 20\)/);
   assert.match(source, /所有行动/);
+});
+
+test("member exporter falls back to CORS fetch when GM XHR is missing or errors", () => {
+  assert.match(source, /function gmXmlHttpRequestFn\(\)/);
+  assert.match(source, /function requestJsonWithFetch\(/);
+  assert.match(source, /fetch: false/);
+  assert.match(source, /mode: "cors"/);
+  assert.match(source, /if \(!gmRequest\) return requestJsonWithFetch/);
+  assert.match(source, /error\?\.message !== tr\("syncUnreachable"\)/);
+  assert.doesNotMatch(source, /headers: \{ "content-type": "application\/json" \}/);
 });
