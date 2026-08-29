@@ -104,3 +104,111 @@ test("highest enhancement of the same owned item is retained", () => {
   );
   assert.equal(gloves.enhancementLevel, 14);
 });
+
+test("combat necklace and task badge slots are kept (game types are neck/trinket)", () => {
+  const snapshot = {
+    loadoutCatalog: [
+      {
+        name: "水法",
+        category: "combat",
+        issues: [],
+        equipment: [
+          ...mageCombatEquipment("water", 7),
+          entry("/items/wizard_necklace", 3),
+          entry("/items/expert_task_badge", 0),
+        ],
+      },
+    ],
+  };
+
+  const selection = selectCombatBuild(snapshot, "水");
+  assert.equal(selection.source, "dedicated-combat-loadout");
+  assert.ok(
+    selection.build.equipment.some((row) => row.itemHrid === "/items/wizard_necklace"),
+    "wizard necklace must stay in the combat build",
+  );
+  assert.ok(
+    selection.build.equipment.some((row) => row.itemHrid === "/items/expert_task_badge"),
+    "task badge must stay in the combat build",
+  );
+});
+
+test("skilling necklace in a combat preset is replaced by an owned combat necklace", () => {
+  const snapshot = {
+    loadoutCatalog: [
+      {
+        name: "fire",
+        category: "combat",
+        issues: [],
+        equipment: [
+          ...mageCombatEquipment("fire", 6),
+          entry("/items/necklace_of_wisdom", 4),
+          entry("/items/chimerical_quiver", 0),
+        ],
+      },
+      {
+        name: "水法配件",
+        category: "combat",
+        issues: [],
+        equipment: [
+          ...mageCombatEquipment("water", 5),
+          entry("/items/wizard_necklace", 3),
+          entry("/items/enchanted_cloak", 3),
+        ],
+      },
+    ],
+  };
+
+  const selection = selectCombatBuild(snapshot, "火");
+  assert.equal(selection.source, "dedicated-combat-loadout");
+  assert.equal(selection.build.name, "fire");
+  assert.ok(
+    selection.build.equipment.some((row) => row.itemHrid === "/items/wizard_necklace"),
+  );
+  assert.ok(
+    !selection.build.equipment.some((row) => row.itemHrid === "/items/necklace_of_wisdom"),
+  );
+  assert.ok(
+    selection.build.equipment.some((row) => row.itemHrid === "/items/enchanted_cloak"),
+    "ranged quiver on a mage should yield to an owned mage cloak",
+  );
+  assert.ok(
+    !selection.build.equipment.some((row) => row.itemHrid === "/items/chimerical_quiver"),
+  );
+});
+
+test("profession rare-find jewelry is not overlaid onto a combat preset", () => {
+  const snapshot = {
+    loadoutCatalog: [
+      {
+        name: "fire",
+        category: "combat",
+        issues: [],
+        equipment: [
+          ...mageCombatEquipment("fire", 6),
+          entry("/items/earrings_of_regeneration", 3),
+          entry("/items/ring_of_regeneration", 7),
+        ],
+      },
+      {
+        name: "炼金",
+        category: "profession",
+        issues: [],
+        equipment: [
+          entry("/items/alchemists_top", 10),
+          entry("/items/earrings_of_rare_find", 7),
+          entry("/items/ring_of_rare_find", 7),
+          entry("/items/necklace_of_wisdom", 4),
+        ],
+      },
+    ],
+  };
+
+  const selection = selectCombatBuild(snapshot, "火");
+  const hrids = selection.build.equipment.map((row) => row.itemHrid);
+  assert.ok(hrids.includes("/items/earrings_of_regeneration"));
+  assert.ok(hrids.includes("/items/ring_of_regeneration"));
+  assert.ok(!hrids.includes("/items/earrings_of_rare_find"));
+  assert.ok(!hrids.includes("/items/ring_of_rare_find"));
+  assert.ok(!hrids.includes("/items/necklace_of_wisdom"));
+});

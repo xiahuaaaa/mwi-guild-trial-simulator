@@ -10,13 +10,36 @@ const COMBAT_SLOTS = new Set([
   "/equipment_types/head",
   "/equipment_types/legs",
   "/equipment_types/main_hand",
-  "/equipment_types/necklace",
+  "/equipment_types/neck",
   "/equipment_types/off_hand",
   "/equipment_types/pouch",
   "/equipment_types/ring",
-  "/equipment_types/task_badge",
+  "/equipment_types/trinket",
   "/equipment_types/two_hand",
 ]);
+
+const ACCESSORY_SLOTS = new Set([
+  "/equipment_types/back",
+  "/equipment_types/charm",
+  "/equipment_types/earrings",
+  "/equipment_types/neck",
+  "/equipment_types/off_hand",
+  "/equipment_types/pouch",
+  "/equipment_types/ring",
+  "/equipment_types/trinket",
+]);
+
+const CHARM_FOCUS_BY_ROLE = {
+  弓: "/skills/ranged",
+  弩: "/skills/ranged",
+  火: "/skills/magic",
+  水: "/skills/magic",
+  自: "/skills/magic",
+  盾: "/skills/defense",
+  枪: "/skills/melee",
+  剑: "/skills/melee",
+  锤: "/skills/melee",
+};
 
 const CORE_ARMOR_SLOTS = new Set([
   "/equipment_types/body",
@@ -35,6 +58,8 @@ const MAGIC_BLUEPRINTS = {
     "/equipment_types/body": ["/items/royal_fire_robe_top"],
     "/equipment_types/legs": ["/items/royal_fire_robe_bottoms"],
     "/equipment_types/feet": ["/items/pathseeker_boots"],
+    "/equipment_types/back": ["/items/enchanted_cloak"],
+    "/equipment_types/neck": ["/items/wizard_necklace"],
   },
   水: {
     "/equipment_types/main_hand": ["/items/rippling_trident"],
@@ -44,6 +69,8 @@ const MAGIC_BLUEPRINTS = {
     "/equipment_types/body": ["/items/royal_water_robe_top"],
     "/equipment_types/legs": ["/items/royal_water_robe_bottoms"],
     "/equipment_types/feet": ["/items/pathseeker_boots"],
+    "/equipment_types/back": ["/items/enchanted_cloak"],
+    "/equipment_types/neck": ["/items/wizard_necklace"],
   },
   自: {
     "/equipment_types/main_hand": ["/items/blooming_trident"],
@@ -53,6 +80,8 @@ const MAGIC_BLUEPRINTS = {
     "/equipment_types/body": ["/items/royal_nature_robe_top"],
     "/equipment_types/legs": ["/items/royal_nature_robe_bottoms"],
     "/equipment_types/feet": ["/items/pathseeker_boots"],
+    "/equipment_types/back": ["/items/enchanted_cloak"],
+    "/equipment_types/neck": ["/items/wizard_necklace"],
   },
 };
 
@@ -75,7 +104,10 @@ export function selectCombatBuild(snapshot, role) {
     .sort((left, right) => combatBuildScore(right, role) - combatBuildScore(left, role));
 
   if (dedicated.length > 0) {
-    return { build: dedicated[0], source: "dedicated-combat-loadout" };
+    return {
+      build: overlayOwnedCombatAccessories(dedicated[0], catalog, role),
+      source: "dedicated-combat-loadout",
+    };
   }
 
   const synthesized = synthesizeCombatBuild(catalog, role);
@@ -104,27 +136,7 @@ export function isCombatReady(build, role) {
 }
 
 export function synthesizeCombatBuild(catalog, role) {
-  const pool = highestEnhancementInstances(
-    catalog.flatMap((build) =>
-      Array.isArray(build?.equipment) ? build.equipment : [],
-    ),
-  );
-  const bySlot = new Map();
-  for (const entry of pool) {
-    const detail = itemDetailMap[entry.itemHrid];
-    const type = detail?.equipmentDetail?.type;
-    if (!COMBAT_SLOTS.has(type)) continue;
-    if (
-      !["/equipment_types/main_hand", "/equipment_types/two_hand"].includes(type) &&
-      !hasCombatStats(detail?.equipmentDetail?.combatStats)
-    ) {
-      continue;
-    }
-    const list = bySlot.get(type) ?? [];
-    list.push(entry);
-    bySlot.set(type, list);
-  }
-
+  const bySlot = combatItemPoolBySlot(catalog, role);
   const weaponCandidates = [
     ...(bySlot.get("/equipment_types/main_hand") ?? []),
     ...(bySlot.get("/equipment_types/two_hand") ?? []),
@@ -161,6 +173,83 @@ export function synthesizeCombatBuild(catalog, role) {
   return isCombatReady(build, role) ? build : null;
 }
 
+function overlayOwnedCombatAccessories(build, catalog, role) {
+  const bySlot = new Map();
+  for (const entry of build.equipment) {
+    const type = itemDetailMap[entry.itemHrid]?.equipmentDetail?.type;
+    if (COMBAT_SLOTS.has(type)) bySlot.set(type, entry);
+  }
+  const pool = combatItemPoolBySlot(catalog, role);
+  const weapon = weaponFor(build);
+  const weaponType = weapon
+    ? itemDetailMap[weapon.itemHrid]?.equipmentDetail?.type
+    : null;
+  for (const slot of COMBAT_SLOTS) {
+    if (
+      slot === "/equipment_types/main_hand" ||
+      slot === "/equipment_types/two_hand" ||
+      (slot === "/equipment_types/off_hand" &&
+        weaponType === "/equipment_types/two_hand")
+    ) {
+      continue;
+    }
+    const current = bySlot.get(slot);
+    const overlayAccessories = ACCESSORY_SLOTS.has(slot);
+    if (
+      current &&
+      !overlayAccessories &&
+      !isPrimarilySkilling(current, role)
+    ) {
+      continue;
+    }
+    const selected = pickBestForSlot(pool.get(slot) ?? [], role, slot);
+    if (selected) {
+      bySlot.set(slot, selected);
+    } else if (current && isPrimarilySkilling(current, role)) {
+      bySlot.delete(slot);
+    }
+  }
+  return { ...build, equipment: [...bySlot.values()] };
+}
+
+function combatItemPoolBySlot(catalog, role) {
+  const pool = highestEnhancementInstances(
+    catalog.flatMap((row) =>
+      Array.isArray(row?.equipment) ? row.equipment : [],
+    ),
+  );
+  const bySlot = new Map();
+  for (const entry of pool) {
+    const detail = itemDetailMap[entry.itemHrid];
+    const type = detail?.equipmentDetail?.type;
+    if (!COMBAT_SLOTS.has(type)) continue;
+    if (
+      !["/equipment_types/main_hand", "/equipment_types/two_hand"].includes(type) &&
+      !hasCombatStats(detail?.equipmentDetail?.combatStats)
+    ) {
+      continue;
+    }
+    if (
+      !["/equipment_types/main_hand", "/equipment_types/two_hand"].includes(type) &&
+      isPrimarilySkilling(entry, role)
+    ) {
+      continue;
+    }
+    const list = bySlot.get(type) ?? [];
+    list.push(entry);
+    bySlot.set(type, list);
+  }
+  return bySlot;
+}
+
+function isPrimarilySkilling(entry, role) {
+  const detail = itemDetailMap[entry.itemHrid];
+  const noncombat = detail?.equipmentDetail?.noncombatStats ?? {};
+  const hasSkilling = Object.values(noncombat).some((value) => Number(value) !== 0);
+  if (!hasSkilling) return false;
+  return combatWeightedFitness(entry, role) <= 0;
+}
+
 function normalizeCombatBuild(build) {
   const equipment = [];
   const slots = new Map();
@@ -194,7 +283,7 @@ function blueprintPriority(entry, role, slot) {
   return preferred.some((hrid) => itemFamily(hrid) === family) ? 1 : 0;
 }
 
-function itemCombatFitness(entry, role) {
+function combatWeightedFitness(entry, role) {
   const detail = itemDetailMap[entry.itemHrid];
   const stats = detail?.equipmentDetail?.combatStats ?? {};
   const stylePrefix =
@@ -208,7 +297,8 @@ function itemCombatFitness(entry, role) {
             ? "slash"
             : "smash";
   const elementPrefix = role === "火" ? "fire" : role === "水" ? "water" : role === "自" ? "nature" : null;
-  const weighted =
+  const charmFocus = CHARM_FOCUS_BY_ROLE[role];
+  return (
     positive(stats[`${stylePrefix}Accuracy`]) * 40 +
     positive(stats[`${stylePrefix}Damage`]) * 50 +
     positive(stats.attackSpeed) * 22 +
@@ -217,13 +307,20 @@ function itemCombatFitness(entry, role) {
     positive(stats.abilityHaste) * 0.8 +
     positive(stats.criticalRate) * 25 +
     positive(stats.criticalDamage) * 15 +
+    positive(stats.taskDamage) * 40 +
     (elementPrefix ? positive(stats[`${elementPrefix}Amplify`]) * 40 : 0) +
     (elementPrefix ? positive(stats[`${elementPrefix}Penetration`]) * 30 : 0) +
     (role === "自" ? positive(stats.healingAmplify) * 45 : 0) +
+    (charmFocus && stats.focusTraining === charmFocus ? 40 : 0) +
     positive(stats.armor) * 0.03 +
     positive(stats.maxHitpoints) * 0.001 +
-    positive(stats.maxManapoints) * 0.001;
-  return weighted * 1_000 + Number(detail?.itemLevel ?? 0);
+    positive(stats.maxManapoints) * 0.001
+  );
+}
+
+function itemCombatFitness(entry, role) {
+  const detail = itemDetailMap[entry.itemHrid];
+  return combatWeightedFitness(entry, role) * 1_000 + Number(detail?.itemLevel ?? 0);
 }
 
 function combatBuildScore(build, role) {
