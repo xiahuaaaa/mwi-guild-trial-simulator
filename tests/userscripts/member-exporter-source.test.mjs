@@ -46,7 +46,7 @@ test("page bridge normalizes real MWI wearable and ability maps", () => {
 });
 
 test("member exporter is a zero-configuration TMD uploader", () => {
-  assert.match(source, /@version\s+0\.6\.21/);
+  assert.match(source, /@version\s+0\.6\.22/);
   assert.match(source, /@name\s+TMD-guild-trial-sync/);
   assert.match(source, /@name:en\s+TMD-guild-trial-sync/);
   assert.match(source, /@match\s+https:\/\/www\.milkywayidlecn\.com\/\*/);
@@ -339,6 +339,148 @@ test("page bridge prefers a hydrated Game Core loadout over a names-only React v
   assert.equal(posted?.payload?.loadouts?.[0]?.abilities?.length, 1);
   assert.equal(posted?.payload?.loadouts?.[0]?.equipment?.[0]?.itemHrid, "/items/test_bow");
   assert.equal(posted?.payload?.loadouts?.[0]?.equipment?.[1]?.itemHrid, "/items/hash_sword");
+});
+
+function loadApplyHarness({ search = "", coreCharacter = null } = {}) {
+  const start = source.indexOf("  const state = {");
+  const end = source.indexOf("  function hydrateFromGameCache()");
+  assert.ok(start >= 0 && end > start);
+  const sandbox = {
+    Map,
+    Set,
+    Object,
+    Array,
+    String,
+    Number,
+    Boolean,
+    JSON,
+    Math,
+    console,
+    URLSearchParams,
+    location: { search },
+    window: {
+      location: { search, origin: "https://www.milkywayidle.com" },
+      MWI_QUEUE_PLANNER: coreCharacter
+        ? { getGameCore: () => ({ state: { character: coreCharacter } }) }
+        : undefined,
+    },
+  };
+  runInNewContext(
+    `${source.slice(start, end)}
+    this.state = state;
+    this.applyCharacterData = applyCharacterData;
+    this.currentCharacterId = currentCharacterId;`,
+    sandbox,
+  );
+  return sandbox;
+}
+
+function altLoadout(characterId, loadoutId, name) {
+  return {
+    id: loadoutId,
+    name,
+    actionTypeHrid: "/action_types/combat",
+    characterId,
+    wearableMap: {
+      "/item_locations/main_hand": `${characterId}::/item_locations/main_hand::/items/gobo_defender::14`,
+    },
+  };
+}
+
+test("member exporter keeps YouCan loadouts when daydayup and NoCan fibers are also in memory", () => {
+  const youCan = { id: 200, name: "YouCan" };
+  const harness = loadApplyHarness({
+    search: "?characterId=200",
+    coreCharacter: youCan,
+  });
+  harness.applyCharacterData({
+    character: { id: 100, name: "daydayup" },
+    loadouts: [altLoadout(100, 1, "炼金强化"), altLoadout(100, 2, "迷宫枪")],
+  });
+  harness.applyCharacterData({
+    character: youCan,
+    loadouts: [altLoadout(200, 11, "炼金强化"), altLoadout(200, 12, "工会战斗")],
+  });
+  harness.applyCharacterData({
+    character: { id: 300, name: "NoCan" },
+    loadouts: [altLoadout(300, 21, "制作"), altLoadout(300, 22, "采集")],
+  });
+  assert.equal(harness.state.character.name, "YouCan");
+  assert.equal(harness.state.loadouts.length, 2);
+  assert.equal(String(harness.state.loadouts[0].name), "炼金强化");
+  assert.equal(String(harness.state.loadouts[1].name), "工会战斗");
+  assert.equal(harness.currentCharacterId(), "200");
+});
+
+test("member exporter replaces rather than merges when switching alts without a session id yet", () => {
+  const harness = loadApplyHarness();
+  harness.applyCharacterData({
+    character: { id: 100, name: "daydayup" },
+    loadouts: [altLoadout(100, 1, "炼金强化")],
+  });
+  harness.applyCharacterData({
+    character: { id: 200, name: "YouCan" },
+    loadouts: [altLoadout(200, 11, "工会战斗")],
+  });
+  assert.equal(String(harness.state.character.name), "YouCan");
+  assert.equal(harness.state.loadouts.length, 1);
+  assert.equal(String(harness.state.loadouts[0].name), "工会战斗");
+});
+
+test("page bridge ignores a richer leftover alt instead of scoring it as the current character", () => {
+  const start = source.indexOf("function pageBridgeMain(channel)");
+  const end = source.indexOf("\n\n  function installPageBridge()", start);
+  assert.ok(start >= 0 && end > start);
+  const pageBridgeMain = new Function(`return (${source.slice(start, end).trim()})`)();
+  const youCanState = {
+    character: { id: 200, name: "YouCan", guildName: "Wandering ICarus" },
+    characterLoadoutDict: {
+      11: {
+        id: 11,
+        name: "工会战斗",
+        actionTypeHrid: "/action_types/combat",
+        wearableMap: { "/item_locations/main_hand": "200::/item_locations/main_hand::/items/gobo_defender::14" },
+      },
+    },
+  };
+  const daydayupState = {
+    character: { id: 100, name: "daydayup", guildName: "Wandering ICarus" },
+    characterLoadoutDict: Object.fromEntries(
+      Array.from({ length: 20 }, (_, index) => [index + 1, {
+        id: index + 1,
+        name: `daydayup-${index + 1}`,
+        actionTypeHrid: "/action_types/combat",
+        wearableMap: { "/item_locations/head": `100::/item_locations/head::/items/gobo_defender::${index}` },
+      }]),
+    ),
+  };
+  const fiber = { stateNode: { state: daydayupState } };
+  const root = { "__reactFiber$test": fiber };
+  let posted = null;
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  globalThis.window = {
+    location: { origin: "https://www.milkywayidle.com", search: "?characterId=200" },
+    MWI_QUEUE_PLANNER: { getGameCore: () => ({ state: youCanState }) },
+    postMessage: (message) => { posted = message; },
+    addEventListener: () => {},
+  };
+  globalThis.document = {
+    readyState: "complete",
+    querySelector: () => root,
+    getElementById: () => null,
+    body: null,
+    addEventListener: () => {},
+  };
+  try {
+    pageBridgeMain("test-channel");
+  } finally {
+    globalThis.window = previousWindow;
+    globalThis.document = previousDocument;
+  }
+  assert.equal(posted?.payload?.character?.name, "YouCan");
+  assert.equal(posted?.payload?.loadouts?.length, 1);
+  assert.equal(posted?.payload?.loadouts?.[0]?.name, "工会战斗");
 });
 
 test("member exporter can persistently collapse into a frog launcher", () => {
