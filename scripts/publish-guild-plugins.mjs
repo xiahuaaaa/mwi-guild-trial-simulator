@@ -140,6 +140,7 @@ if (isMain) {
         ? `release: TMD v${artifacts.tmdVersion} / WI v${artifacts.wiVersion} — ${notes}`
         : `release: TMD v${artifacts.tmdVersion} / WI v${artifacts.wiVersion}`;
       run(["git", "commit", "-m", message], work, { env: gitIdentityEnv() });
+      run(["git", "pull", "--rebase", "origin", "HEAD"], work);
       run(["git", "push", "origin", "HEAD"], work);
       console.log("pushed helper dist for TMD and WI; Greasy Fork webhooks should sync");
     }

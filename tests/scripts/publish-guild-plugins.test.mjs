@@ -32,8 +32,8 @@ test("TMD Gitee dist points @downloadURL/@updateURL at gitee raw", () => {
 
 test("guild plugin publish builds TMD and WI artifacts for all three channels", () => {
   const artifacts = buildGuildPluginArtifacts(tmdSource, "593342");
-  assert.equal(artifacts.tmdVersion, "0.6.22");
-  assert.equal(artifacts.wiVersion, "0.6.22-wi.1");
+  assert.equal(artifacts.tmdVersion, "0.6.23");
+  assert.equal(artifacts.wiVersion, "0.6.23-wi.1");
   assert.match(artifacts.tmdGithub, /requestJsonWithFetch/);
   assert.match(artifacts.wiGithub, /requestJsonWithFetch/);
   assert.match(artifacts.tmdGithub, /588902/);

@@ -46,7 +46,7 @@ test("page bridge normalizes real MWI wearable and ability maps", () => {
 });
 
 test("member exporter is a zero-configuration TMD uploader", () => {
-  assert.match(source, /@version\s+0\.6\.22/);
+  assert.match(source, /@version\s+0\.6\.23/);
   assert.match(source, /@name\s+TMD-guild-trial-sync/);
   assert.match(source, /@name:en\s+TMD-guild-trial-sync/);
   assert.match(source, /@match\s+https:\/\/www\.milkywayidlecn\.com\/\*/);
@@ -101,7 +101,8 @@ test("member exporter reads and verifies the native TMD guild roster", () => {
   assert.match(source, /guildCharacterMap/);
   assert.match(source, /guildSharableCharacterMap/);
   assert.match(source, /guild\.name === GUILD_IDENTITY\.gameGuildName/);
-  assert.match(source, /guild\.id === GUILD_IDENTITY\.gameGuildId/);
+  assert.match(source, /ownsCurrentGuild\(\)/);
+  assert.match(source, /hasPinnedGuildId\(incomingGuildId\)/);
   assert.match(source, /api\/public\/guilds\/\$\{GUILD_IDENTITY\.apiSlug\}\/roster/);
   assert.match(source, /rosterSyncAllowed/);
   assert.match(source, /登录后自动同步本周试炼类型/);
@@ -342,9 +343,10 @@ test("page bridge prefers a hydrated Game Core loadout over a names-only React v
 });
 
 function loadApplyHarness({ search = "", coreCharacter = null } = {}) {
+  const identity = source.match(/const GUILD_IDENTITY = Object\.freeze\(\{[\s\S]*?\}\);/);
   const start = source.indexOf("  const state = {");
   const end = source.indexOf("  function hydrateFromGameCache()");
-  assert.ok(start >= 0 && end > start);
+  assert.ok(identity && start >= 0 && end > start);
   const sandbox = {
     Map,
     Set,
@@ -366,10 +368,52 @@ function loadApplyHarness({ search = "", coreCharacter = null } = {}) {
     },
   };
   runInNewContext(
-    `${source.slice(start, end)}
+    `${identity[0]}
+    ${source.slice(start, end)}
     this.state = state;
     this.applyCharacterData = applyCharacterData;
     this.currentCharacterId = currentCharacterId;`,
+    sandbox,
+  );
+  return sandbox;
+}
+
+function loadGuildConfirmHarness({ search = "", coreCharacter = null } = {}) {
+  const identity = source.match(/const GUILD_IDENTITY = Object\.freeze\(\{[\s\S]*?\}\);/);
+  const start = source.indexOf("  const state = {");
+  const end = source.indexOf("  function hydrateFromGameCache()");
+  const detectStart = source.indexOf("  function detectedMemberId()");
+  const detectEnd = source.indexOf("  /** Ask the page bridge", detectStart);
+  assert.ok(identity && start >= 0 && end > start && detectStart >= 0 && detectEnd > detectStart);
+  const sandbox = {
+    Map,
+    Set,
+    Object,
+    Array,
+    String,
+    Number,
+    Boolean,
+    JSON,
+    Math,
+    console,
+    URLSearchParams,
+    location: { search },
+    window: {
+      location: { search, origin: "https://www.milkywayidle.com" },
+      MWI_QUEUE_PLANNER: coreCharacter
+        ? { getGameCore: () => ({ state: { character: coreCharacter } }) }
+        : undefined,
+    },
+  };
+  runInNewContext(
+    `${identity[0]}
+    ${source.slice(start, end)}
+    ${source.slice(detectStart, detectEnd)}
+    this.state = state;
+    this.applyCharacterData = applyCharacterData;
+    this.confirmedTmdGuild = confirmedTmdGuild;
+    this.tmdConfirmDetail = tmdConfirmDetail;
+    this.detectedGameGuild = detectedGameGuild;`,
     sandbox,
   );
   return sandbox;
@@ -425,6 +469,56 @@ test("member exporter replaces rather than merges when switching alts without a 
   assert.equal(String(harness.state.character.name), "YouCan");
   assert.equal(harness.state.loadouts.length, 1);
   assert.equal(String(harness.state.loadouts[0].name), "工会战斗");
+});
+
+test("TMD confirmation accepts a TMD-named character even when leftover guild.id is not 369", () => {
+  const harness = loadGuildConfirmHarness({
+    search: "?characterId=222849",
+    coreCharacter: { id: 222849, name: "Ameratto" },
+  });
+  harness.applyCharacterData({
+    character: { id: 222849, name: "Ameratto", guildName: "TMD" },
+    guild: { id: 459, name: "TMD" },
+  });
+  assert.equal(harness.detectedGameGuild().name, "TMD");
+  assert.equal(harness.confirmedTmdGuild(), true);
+  assert.doesNotMatch(harness.tmdConfirmDetail(), /guildId=459≠369/);
+});
+
+test("TMD confirmation prefers the pinned game guild id over a leftover guild.id", () => {
+  const harness = loadGuildConfirmHarness();
+  harness.applyCharacterData({
+    character: { id: 222849, name: "Ameratto", guildId: 369, guildName: "TMD" },
+    guild: { id: 459, guildId: 369, name: "TMD" },
+  });
+  assert.equal(harness.detectedGameGuild().id, 369);
+  assert.equal(harness.confirmedTmdGuild(), true);
+});
+
+test("TMD confirmation keeps TMD after a later fiber writes a foreign guild.id", () => {
+  const harness = loadGuildConfirmHarness();
+  harness.applyCharacterData({
+    character: { id: 222849, name: "Ameratto", guildId: 369, guildName: "TMD" },
+    guild: { id: 369, name: "TMD" },
+  });
+  harness.applyCharacterData({
+    guild: { id: 459 },
+  });
+  harness.applyCharacterData({
+    guildId: 459,
+  });
+  assert.equal(harness.confirmedTmdGuild(), true);
+  assert.equal(harness.detectedGameGuild().id, 369);
+  assert.equal(harness.detectedGameGuild().name, "TMD");
+});
+
+test("TMD confirmation still rejects a Wandering ICarus leftover", () => {
+  const harness = loadGuildConfirmHarness();
+  harness.applyCharacterData({
+    character: { id: 1, name: "adiudiu", guildId: 667, guildName: "Wandering ICarus" },
+    guild: { id: 667, name: "Wandering ICarus" },
+  });
+  assert.equal(harness.confirmedTmdGuild(), false);
 });
 
 test("page bridge ignores a richer leftover alt instead of scoring it as the current character", () => {
