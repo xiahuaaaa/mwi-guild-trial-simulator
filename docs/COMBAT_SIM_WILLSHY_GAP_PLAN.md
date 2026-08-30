@@ -1,7 +1,7 @@
 # 公会战斗模拟：对照 will-shy 后的落地方案
 
 更新时间：2026-08-30（Asia/Shanghai）
-状态：**方案已拍板，战斗引擎切片已合入；个人复活已改为 A（自动复活关闭、技能复活保留）。**
+状态：**方案已拍板，战斗引擎切片已合入；API 采集切片（§3.1–3.3、§3.5 第 1–2 步）已合入；个人复活已改为 A（自动复活关闭、技能复活保留）。**
 权威：对照结论、实现边界、部署顺序以本文为准；实现后再回写 [`CLAUDE_CODE_HANDOFF.md`](../CLAUDE_CODE_HANDOFF.md) §4.3 / §6.3 / §11.1。
 
 本文吸收内部 review（Request changes）。本切片仅落实战斗模拟契约；API、插件、运行副本和覆盖率门禁仍按后续门槛执行。
@@ -200,6 +200,8 @@ ratioBoost = stack * 0.1  → /buff_types/damage 与 /buff_types/accuracy
 
 ## 3. 快照、校验与灰度
 
+状态：**API 采集契约切片已合入（§3.1–3.3、§3.5 第 1–2 步）；插件采集、覆盖率门禁与永久加成启用仍未执行。**
+
 ### 3.1 为什么不能先发插件
 
 [`sanitizeMemberSnapshot`](../apps/api/server.mjs) 对 snapshot **严格白名单** `ensureKeys`。当前允许键不含 `houseRooms` / `achievements` / `shrines`。新插件先上传 → `unknown_field` 整包被拒，成员配装同步中断。
@@ -261,8 +263,8 @@ Feature flag：`permanentBuffsEnabled` 写入 lab JSON，与 `combatRulesVersion
 
 ### 3.5 部署顺序（强制，禁止颠倒）
 
-1. **API**：白名单加入三字段 + 严格校验 + carry-forward；开发测 round-trip。
-2. **同步运行副本** `/Users/xhy/.local/share/mwi-guild-server`，重启 LaunchAgent，对本机 API 做往返验证。不得用开发 sqlite 覆盖线上库。
+1. ~~**API**：白名单加入三字段 + 严格校验 + carry-forward；开发测 round-trip。~~ 已合入并验证。
+2. ~~**同步运行副本** `/Users/xhy/.local/share/mwi-guild-server`，重启 LaunchAgent，对本机 API 做往返验证。不得用开发 sqlite 覆盖线上库。~~ 已完成；未同步数据库。
 3. **再发布** TMD+WI 插件采集（`publish-guild-plugins.mjs`，六个源 `@version` 一致）。
 4. 覆盖率检查（QQ/脚本列出未采集成员）。
 5. 门槛达标后，才允许模拟器 `permanentBuffsEnabled=true`。

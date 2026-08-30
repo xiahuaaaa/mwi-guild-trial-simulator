@@ -72,6 +72,8 @@ export interface MemberCapabilitySnapshotV2 {
   auras: Record<string, number>;
   houseRooms?: Record<string, number>;
   achievements?: Record<string, boolean>;
+  shrines?: Record<string, number>;
+  permanentBuffsCaptured?: boolean;
   loadoutCatalog?: SavedLoadout[];
   approvedBuilds: ApprovedCombatBuild[];
   currentBuild?: ApprovedCombatBuild;

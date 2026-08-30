@@ -7,6 +7,8 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildGuildRegistry, resolveRegisteredGuild } from "./guild-config.mjs";
+import achievementDetailMap from "../../packages/shykai-full-runtime/generated/src/combatsimulator/data/achievementDetailMap.json.js";
+import houseRoomDetailMap from "../../packages/shykai-full-runtime/generated/src/combatsimulator/data/houseRoomDetailMap.json.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const DEFAULT_FIXTURE = resolve(ROOT, "fixtures/monsters/guild-trial-2026-07-24-jellyfish-hedgehog.json");
@@ -45,6 +47,15 @@ const COMBAT_TRIAL_ROLES = new Set([
   "support",
   "tank",
 ]);
+const SNAPSHOT_PERMANENT_FIELDS = ["houseRooms", "achievements", "shrines"];
+const SHRINE_HRIDS = new Set([
+  "/shrines/force",
+  "/shrines/tempo",
+  "/shrines/spirit",
+  "/shrines/scholar",
+]);
+const HOUSE_ROOM_HRIDS = new Set(Object.keys(houseRoomDetailMap));
+const ACHIEVEMENT_HRIDS = new Set(Object.keys(achievementDetailMap));
 
 function trialKindForHrid(trialHrid) {
   if (COMBAT_TRIAL_NAMES.has(trialHrid)) return "combat";
@@ -117,6 +128,37 @@ function levelMap(value, label) {
   for (const [hrid, level] of Object.entries(row)) {
     if (!hrid.startsWith("/") || hrid.length > 256) throw fail(400, "invalid_field", `${label} keys must be HRIDs`);
     result[hrid] = integer(typeof level === "object" && level ? level.level : level, `${label}.${hrid}`, 0, 10000);
+  }
+  return result;
+}
+
+function boundedLevelMap(value, label, allowedHrids, maxLevel) {
+  const row = object(value, label);
+  const result = {};
+  for (const [hrid, level] of Object.entries(row)) {
+    if (!allowedHrids.has(hrid)) throw fail(400, "invalid_field", `${label}.${hrid} is not an allowed HRID`);
+    result[hrid] = integer(level, `${label}.${hrid}`, 0, maxLevel);
+  }
+  return result;
+}
+
+function sanitizeShrines(value, label = "snapshot.shrines") {
+  return boundedLevelMap(value, label, SHRINE_HRIDS, 20);
+}
+
+function sanitizeHouseRooms(value, label = "snapshot.houseRooms") {
+  return boundedLevelMap(value, label, HOUSE_ROOM_HRIDS, 8);
+}
+
+function sanitizeAchievements(value, label = "snapshot.achievements") {
+  const row = object(value, label);
+  const result = {};
+  for (const [hrid, enabled] of Object.entries(row)) {
+    if (!ACHIEVEMENT_HRIDS.has(hrid)) throw fail(400, "invalid_field", `${label}.${hrid} is not an allowed HRID`);
+    if (enabled !== true && enabled !== false && enabled !== 0 && enabled !== 1) {
+      throw fail(400, "invalid_field", `${label}.${hrid} must be boolean or 0/1`);
+    }
+    result[hrid] = enabled === true || enabled === 1;
   }
   return result;
 }
@@ -578,7 +620,7 @@ function sanitizeLifeAssignment(value, label = "lifeAssignment") {
 /** Rejects unknown/sensitive input. This is the API's data minimisation boundary. */
 export function sanitizeMemberSnapshot(value, expectedGuildId, expectedMemberId) {
   const row = object(value, "snapshot");
-  ensureKeys(row, new Set(["schemaVersion", "memberId", "displayName", "guildId", "capturedAt", "source", "sourceSchemaVersion", "freshness", "confidence", "skills", "learnedAbilities", "auras", "loadoutCatalog", "approvedBuilds", "participation", "issues"]), "snapshot");
+  ensureKeys(row, new Set(["schemaVersion", "memberId", "displayName", "guildId", "capturedAt", "source", "sourceSchemaVersion", "freshness", "confidence", "skills", "learnedAbilities", "auras", "houseRooms", "achievements", "shrines", "permanentBuffsCaptured", "loadoutCatalog", "approvedBuilds", "participation", "issues"]), "snapshot");
   if (String(row.schemaVersion) !== "2") throw fail(400, "invalid_field", "snapshot.schemaVersion must be 2");
   if (safeId(row.memberId, "snapshot.memberId") !== expectedMemberId) throw fail(403, "member_mismatch", "member token cannot upload another member's snapshot");
   if (safeId(row.guildId, "snapshot.guildId", GUILD_ID) !== expectedGuildId) throw fail(403, "guild_mismatch", "member token cannot upload another guild's snapshot");
@@ -597,6 +639,14 @@ export function sanitizeMemberSnapshot(value, expectedGuildId, expectedMemberId)
   if (!hasUsableEquipment) {
     throw fail(400, "empty_loadout_catalog", "snapshot has no usable loadout equipment");
   }
+  const permanentBuffsCaptured = row.permanentBuffsCaptured;
+  if (permanentBuffsCaptured !== undefined && typeof permanentBuffsCaptured !== "boolean") {
+    throw fail(400, "invalid_field", "snapshot.permanentBuffsCaptured must be boolean");
+  }
+  const permanentFieldsPresent = SNAPSHOT_PERMANENT_FIELDS.filter((field) => Object.hasOwn(row, field));
+  if (permanentBuffsCaptured === true && permanentFieldsPresent.length !== SNAPSHOT_PERMANENT_FIELDS.length) {
+    throw fail(400, "invalid_field", "snapshot.permanentBuffsCaptured requires houseRooms, achievements, and shrines");
+  }
   return {
     schemaVersion: "2", memberId: expectedMemberId, guildId: expectedGuildId,
     displayName: text(row.displayName, "snapshot.displayName", 100),
@@ -604,11 +654,52 @@ export function sanitizeMemberSnapshot(value, expectedGuildId, expectedMemberId)
     sourceSchemaVersion: text(row.sourceSchemaVersion, "snapshot.sourceSchemaVersion", 100),
     freshness: text(row.freshness, "snapshot.freshness", 32), confidence: text(row.confidence, "snapshot.confidence", 64),
     skills: levelMap(row.skills, "snapshot.skills"), learnedAbilities: levelMap(row.learnedAbilities, "snapshot.learnedAbilities"), auras: levelMap(row.auras, "snapshot.auras"),
+    ...(Object.hasOwn(row, "houseRooms") ? { houseRooms: sanitizeHouseRooms(row.houseRooms) } : {}),
+    ...(Object.hasOwn(row, "achievements") ? { achievements: sanitizeAchievements(row.achievements) } : {}),
+    ...(Object.hasOwn(row, "shrines") ? { shrines: sanitizeShrines(row.shrines) } : {}),
+    ...(permanentBuffsCaptured === undefined ? {} : { permanentBuffsCaptured }),
     loadoutCatalog: sanitizedLoadoutCatalog,
     approvedBuilds: builds.map((build, index) => sanitizeBuild(build, `snapshot.approvedBuilds[${index}]`)),
     participation: { eligibleBossHrids: stringList(participation.eligibleBossHrids, "snapshot.participation.eligibleBossHrids", 20), preferredBossHrids: stringList(participation.preferredBossHrids, "snapshot.participation.preferredBossHrids", 20), maxBossAssignments: integer(participation.maxBossAssignments, "snapshot.participation.maxBossAssignments", 1, 1), allowRoleChange: participation.allowRoleChange, allowSkillChange: participation.allowSkillChange },
     issues: stringList(row.issues ?? [], "snapshot.issues", 50),
   };
+}
+
+function previousPermanentBuffs(db, guildId, memberId) {
+  const row = db.prepare("SELECT payload_json FROM snapshots WHERE guild_id = ? AND member_id = ? ORDER BY id DESC LIMIT 1").get(guildId, memberId);
+  if (!row) return null;
+  let payload;
+  try {
+    payload = JSON.parse(row.payload_json);
+  } catch {
+    return null;
+  }
+  if (payload?.permanentBuffsCaptured !== true) return null;
+  if (!SNAPSHOT_PERMANENT_FIELDS.every((field) => Object.hasOwn(payload, field))) return null;
+  try {
+    return {
+      houseRooms: sanitizeHouseRooms(payload.houseRooms, "previous snapshot.houseRooms"),
+      achievements: sanitizeAchievements(payload.achievements, "previous snapshot.achievements"),
+      shrines: sanitizeShrines(payload.shrines, "previous snapshot.shrines"),
+      permanentBuffsCaptured: true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function mergeMemberSnapshot(db, guildId, memberId, snapshot) {
+  if (snapshot.permanentBuffsCaptured !== undefined) return snapshot;
+  if (SNAPSHOT_PERMANENT_FIELDS.some((field) => Object.hasOwn(snapshot, field))) return snapshot;
+  const previous = previousPermanentBuffs(db, guildId, memberId);
+  return previous ? { ...snapshot, ...previous } : snapshot;
+}
+
+function persistMemberSnapshot(db, guildId, memberId, snapshot, timestamp) {
+  const merged = mergeMemberSnapshot(db, guildId, memberId, snapshot);
+  const result = db.prepare("INSERT INTO snapshots (guild_id, member_id, captured_at, received_at, payload_json) VALUES (?, ?, ?, ?, ?)").run(guildId, memberId, merged.capturedAt, timestamp, safeJson(merged, "snapshot"));
+  db.prepare("UPDATE members SET display_name = ?, updated_at = ? WHERE guild_id = ? AND member_id = ?").run(merged.displayName, timestamp, guildId, memberId);
+  return result;
 }
 
 function initialize(db) {
@@ -1296,8 +1387,7 @@ export async function createGuildApi(options = {}) {
           checkPublicUploadRate(req, memberId);
           const snapshot = sanitizeMemberSnapshot(await readJson(req), guildId, memberId);
           const timestamp = now();
-          const result = db.prepare("INSERT INTO snapshots (guild_id, member_id, captured_at, received_at, payload_json) VALUES (?, ?, ?, ?, ?)").run(guildId, memberId, snapshot.capturedAt, timestamp, safeJson(snapshot, "snapshot"));
-          db.prepare("UPDATE members SET display_name = ?, updated_at = ? WHERE guild_id = ? AND member_id = ?").run(snapshot.displayName, timestamp, guildId, memberId);
+          const result = persistMemberSnapshot(db, guildId, memberId, snapshot, timestamp);
           return json(res, 201, { snapshotId: Number(result.lastInsertRowid), receivedAt: timestamp });
         }
       }
@@ -1405,8 +1495,7 @@ export async function createGuildApi(options = {}) {
           const memberId = safeId(parts[4], "memberId"); requireMember(req, guildId, memberId);
           const snapshot = sanitizeMemberSnapshot(await readJson(req), guildId, memberId);
           const timestamp = now();
-          const result = db.prepare("INSERT INTO snapshots (guild_id, member_id, captured_at, received_at, payload_json) VALUES (?, ?, ?, ?, ?)").run(guildId, memberId, snapshot.capturedAt, timestamp, safeJson(snapshot, "snapshot"));
-          db.prepare("UPDATE members SET display_name = ?, updated_at = ? WHERE guild_id = ? AND member_id = ?").run(snapshot.displayName, timestamp, guildId, memberId);
+          const result = persistMemberSnapshot(db, guildId, memberId, snapshot, timestamp);
           return json(res, 201, { snapshotId: Number(result.lastInsertRowid), receivedAt: timestamp });
         }
         if (req.method === "GET" && parts[3] === "assignments" && (parts[4] === "formal" || parts[4] === "test") && parts.length === 5) {

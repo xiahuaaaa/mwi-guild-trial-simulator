@@ -45,12 +45,18 @@ function snapshot(extra = {}) {
 }
 
 test("member snapshots require the exact member token", async (t) => {
-  const { request } = await harness(t);
+  const { request, admin } = await harness(t);
   const denied = await request("/api/guilds/guild-1/members/member-1/snapshots", { method: "POST", body: snapshot() });
   assert.equal(denied.response.status, 401);
   const accepted = await request("/api/guilds/guild-1/members/member-1/snapshots", { method: "POST", headers: { authorization: "Bearer member-secret" }, body: snapshot() });
   assert.equal(accepted.response.status, 201);
   assert.equal(typeof accepted.body.snapshotId, "number");
+  const members = await admin("/api/guilds/guild-1/members");
+  const latestSnapshot = members.body.members[0].latestSnapshot;
+  assert.equal(Object.hasOwn(latestSnapshot, "houseRooms"), false);
+  assert.equal(Object.hasOwn(latestSnapshot, "achievements"), false);
+  assert.equal(Object.hasOwn(latestSnapshot, "shrines"), false);
+  assert.equal(Object.hasOwn(latestSnapshot, "permanentBuffsCaptured"), false);
   const impersonation = await request("/api/guilds/guild-1/members/member-1/snapshots", { method: "POST", headers: { authorization: "Bearer member-secret" }, body: snapshot({ memberId: "another-member" }) });
   assert.equal(impersonation.response.status, 403);
   assert.equal(impersonation.body.error.code, "member_mismatch");
@@ -118,6 +124,107 @@ test("an empty loadout catalog cannot overwrite a previously equipped snapshot",
     members.body.members[0].latestSnapshot.loadoutCatalog[0].equipment[0].itemHrid,
     "/items/wand",
   );
+});
+
+test("member permanent buff fields reject unknown, invalid, and amplified values", async (t) => {
+  const { request } = await harness(t);
+  const captured = {
+    permanentBuffsCaptured: true,
+    houseRooms: {},
+    achievements: {},
+    shrines: {},
+  };
+  const invalidCases = [
+    ["shrine unknown HRID", { shrines: { "/shrines/unknown": 0 } }],
+    ["shrine negative", { shrines: { "/shrines/force": -1 } }],
+    ["shrine fraction", { shrines: { "/shrines/force": 1.5 } }],
+    ["shrine over max", { shrines: { "/shrines/force": 21 } }],
+    ["shrine amplified", { shrines: { "/shrines/force": 1e9 } }],
+    ["house unknown HRID", { houseRooms: { "/house_rooms/unknown": 0 } }],
+    ["house over max", { houseRooms: { "/house_rooms/dojo": 9 } }],
+    ["house amplified", { houseRooms: { "/house_rooms/dojo": 1e9 } }],
+    ["achievement unknown HRID", { achievements: { "/achievements/unknown": true } }],
+    ["achievement invalid number", { achievements: { "/achievements/build_room_level_1": 2 } }],
+    ["achievement invalid string", { achievements: { "/achievements/build_room_level_1": "yes" } }],
+    ["capture marker is not boolean", { permanentBuffsCaptured: "true" }],
+  ];
+
+  for (const [label, override] of invalidCases) {
+    const rejected = await request("/api/guilds/guild-1/members/member-1/snapshots", {
+      method: "POST",
+      headers: { authorization: "Bearer member-secret" },
+      body: snapshot({ ...captured, ...override }),
+    });
+    assert.equal(rejected.response.status, 400, label);
+  }
+});
+
+test("captured=true empty permanent buff maps round-trip as an explicit zero capture", async (t) => {
+  const { request, admin } = await harness(t);
+  const payload = snapshot({
+    permanentBuffsCaptured: true,
+    houseRooms: {},
+    achievements: {},
+    shrines: {},
+  });
+  const accepted = await request("/api/guilds/guild-1/members/member-1/snapshots", {
+    method: "POST",
+    headers: { authorization: "Bearer member-secret" },
+    body: payload,
+  });
+  assert.equal(accepted.response.status, 201);
+
+  const members = await admin("/api/guilds/guild-1/members");
+  const roundTrip = members.body.members[0].latestSnapshot;
+  assert.equal(roundTrip.permanentBuffsCaptured, true);
+  assert.deepEqual(roundTrip.houseRooms, payload.houseRooms);
+  assert.deepEqual(roundTrip.achievements, payload.achievements);
+  assert.deepEqual(roundTrip.shrines, payload.shrines);
+});
+
+test("snapshot carry-forward is shared by authenticated and public POST routes", async (t) => {
+  const { request, admin } = await harness(t);
+  await admin("/api/admin/guilds/TMD", { method: "PUT", body: { name: "TMD" } });
+  await admin("/api/admin/guilds/TMD/members", {
+    method: "PUT",
+    body: { memberId: "adudu", displayName: "adudu", memberToken: "tmd-member-secret" },
+  });
+
+  const captured = snapshot({
+    guildId: "TMD",
+    memberId: "adudu",
+    displayName: "adudu",
+    capturedAt: "2026-07-24T00:00:00.000Z",
+    permanentBuffsCaptured: true,
+    houseRooms: { "/house_rooms/dojo": 8 },
+    achievements: { "/achievements/build_room_level_1": true },
+    shrines: { "/shrines/force": 4 },
+  });
+  const first = await request("/api/guilds/TMD/members/adudu/snapshots", {
+    method: "POST",
+    headers: { authorization: "Bearer tmd-member-secret" },
+    body: captured,
+  });
+  assert.equal(first.response.status, 201);
+
+  const oldClient = snapshot({
+    guildId: "TMD",
+    memberId: "adudu",
+    displayName: "adudu",
+    capturedAt: "2026-07-24T01:00:00.000Z",
+  });
+  const second = await request("/api/public/guilds/TMD/members/adudu/snapshots", {
+    method: "POST",
+    body: oldClient,
+  });
+  assert.equal(second.response.status, 201);
+
+  const members = await admin("/api/guilds/TMD/members");
+  const latest = members.body.members.find((member) => member.memberId === "adudu").latestSnapshot;
+  assert.equal(latest.permanentBuffsCaptured, true);
+  assert.deepEqual(latest.houseRooms, captured.houseRooms);
+  assert.deepEqual(latest.achievements, captured.achievements);
+  assert.deepEqual(latest.shrines, captured.shrines);
 });
 
 test("TMD public uploader accepts roster members without a token and rate limits abuse", async (t) => {
