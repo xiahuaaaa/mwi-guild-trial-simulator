@@ -1,10 +1,10 @@
 # 公会战斗模拟：对照 will-shy 后的落地方案
 
 更新时间：2026-08-30（Asia/Shanghai）
-状态：**方案已拍板，战斗引擎切片已合入；API 采集切片（§3.1–3.3、§3.5 第 1–2 步）已合入；个人复活已改为 A（自动复活关闭、技能复活保留）。**
+状态：**方案已拍板，战斗引擎切片已合入；API 采集切片（§3.1–3.3、§3.5 第 1–2 步）已合入；插件采集与三渠道发布切片（§3.5 第 3 步、§6）已合入；个人复活已改为 A（自动复活关闭、技能复活保留）。**
 权威：对照结论、实现边界、部署顺序以本文为准；实现后再回写 [`CLAUDE_CODE_HANDOFF.md`](../CLAUDE_CODE_HANDOFF.md) §4.3 / §6.3 / §11.1。
 
-本文吸收内部 review（Request changes）。本切片仅落实战斗模拟契约；API、插件、运行副本和覆盖率门禁仍按后续门槛执行。
+本文吸收内部 review（Request changes）。API 采集契约与插件发布已按本方案合入；覆盖率门禁、永久加成启用和正式组合实验室仍按后续门槛执行。
 
 ---
 
@@ -200,11 +200,11 @@ ratioBoost = stack * 0.1  → /buff_types/damage 与 /buff_types/accuracy
 
 ## 3. 快照、校验与灰度
 
-状态：**API 采集契约切片已合入（§3.1–3.3、§3.5 第 1–2 步）；插件采集、覆盖率门禁与永久加成启用仍未执行。**
+状态：**API 采集契约与插件采集/三渠道发布已合入（§3.1–3.3、§3.5 第 1–3 步）；覆盖率门禁与永久加成启用仍未执行。**
 
 ### 3.1 为什么不能先发插件
 
-[`sanitizeMemberSnapshot`](../apps/api/server.mjs) 对 snapshot **严格白名单** `ensureKeys`。当前允许键不含 `houseRooms` / `achievements` / `shrines`。新插件先上传 → `unknown_field` 整包被拒，成员配装同步中断。
+在 API 采集契约合入前，[`sanitizeMemberSnapshot`](../apps/api/server.mjs) 对 snapshot **严格白名单** `ensureKeys`，不含 `houseRooms` / `achievements` / `shrines`；新插件必须在 API 先行后发布，否则会因 `unknown_field` 整包被拒，成员配装同步中断。
 
 快照表 `INSERT` 后读取 `ORDER BY id DESC LIMIT 1`。旧客户端在新客户端之后再传一份 **缺字段或空 map 的全量行**，会盖掉刚采到的房屋/神龛。空 `loadoutCatalog` 已有「不覆盖」纪律；这三项必须有 **服务端 carry-forward**，不能只靠插件自觉。
 
@@ -265,7 +265,7 @@ Feature flag：`permanentBuffsEnabled` 写入 lab JSON，与 `combatRulesVersion
 
 1. ~~**API**：白名单加入三字段 + 严格校验 + carry-forward；开发测 round-trip。~~ 已合入并验证。
 2. ~~**同步运行副本** `/Users/xhy/.local/share/mwi-guild-server`，重启 LaunchAgent，对本机 API 做往返验证。不得用开发 sqlite 覆盖线上库。~~ 已完成；未同步数据库。
-3. **再发布** TMD+WI 插件采集（`publish-guild-plugins.mjs`，六个源 `@version` 一致）。
+3. ~~**再发布** TMD+WI 插件采集（`publish-guild-plugins.mjs`，六个源 `@version` 一致）。~~ 已完成；TMD `0.6.25`、WI `0.6.25-wi.1` 的油叉/Gitee/GitHub 六个源均已校验。
 4. 覆盖率检查（QQ/脚本列出未采集成员）。
 5. 门槛达标后，才允许模拟器 `permanentBuffsEnabled=true`。
 6. 用新 `combatRulesVersion` **从组合实验室重跑**，禁止复用旧 `.local` JSON。
@@ -314,11 +314,15 @@ Spirit：HP/MP 按 ratio 增加后 **仍 floor**（不 ceil）。
 
 ## 6. 插件采集
 
-当前 TMD/WI `@version` 0.6.23 不采集这三项。必须两边公会、三个渠道一起发。
+状态：**插件采集与 TMD/WI 三渠道发布已合入；TMD `0.6.25`、WI `0.6.25-wi.1` 六个源已校验；`permanentBuffsEnabled` 仍关闭。**
+
+- 源字段已按已确认的插件证据固定：房屋认 `characterHouseRoomMap` / `characterHouseRoomDict`，成就认 `characterAchievements` / `characterAchievementMap`，神龛只认 `guildBuildingLevelMap` / `guildBuildingLevelDict`；不使用未证实的 `characterShrineMap`。
+- 房屋只输出 17 个合法 `/house_rooms/*` 且等级 `0..8`；成就只输出 `achievementDetailMap` 合法 HRID 和 boolean/`0`/`1`；神龛只把四个 `/guild_shrines/*`（或已规范化 `/shrines/*`）映射为四个 `/shrines/*`，等级 `0..20`，其它神龛丢弃。
+- 仅成功读到房屋、成就、公会建筑三个容器时设置 `permanentBuffsCaptured: true`；三个容器均为空也表示已采集全 0，缺失容器省略以便 API carry-forward。
+- 唯一发布入口为 `publish-guild-plugins.mjs`，一次构建 TMD 源与 WI 生成源；主 `@name` / `@namespace` 与 TMD 油叉 `588902` 保持不变。
 
 - 只读已有 `init_character_data` / `initClientData` / 当前角色状态；不发包。
-- 游戏字段名以实况为准，实现前在已登录页确认。
-- 新插件设置 `permanentBuffsCaptured: true`。
+- 游戏字段名以已确认的 Sunny/toolasha 插件证据为准；不得猜测未出现的字段。
 - 不上传凭据。空 map + captured=true 表示已采集全 0。
 - TMD 源与 WI 生成源版本一致（发布脚本一次构建）。
 

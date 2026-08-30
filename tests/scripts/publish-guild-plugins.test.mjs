@@ -32,8 +32,8 @@ test("TMD Gitee dist points @downloadURL/@updateURL at gitee raw", () => {
 
 test("guild plugin publish builds TMD and WI artifacts for all three channels", () => {
   const artifacts = buildGuildPluginArtifacts(tmdSource, "593342");
-  assert.equal(artifacts.tmdVersion, "0.6.23");
-  assert.equal(artifacts.wiVersion, "0.6.23-wi.1");
+  assert.equal(artifacts.tmdVersion, "0.6.25");
+  assert.equal(artifacts.wiVersion, "0.6.25-wi.1");
   assert.match(artifacts.tmdGithub, /requestJsonWithFetch/);
   assert.match(artifacts.wiGithub, /requestJsonWithFetch/);
   assert.match(artifacts.tmdGithub, /588902/);
@@ -44,6 +44,10 @@ test("guild plugin publish builds TMD and WI artifacts for all three channels", 
   assert.match(artifacts.channels.wi.gitee, /WI-guild-trial-sync/);
   assert.match(artifacts.channels.tmd.greasyFork, /588902/);
   assert.match(artifacts.channels.wi.greasyFork, /593342/);
+  assert.match(artifacts.tmdGithub, /permanentBuffsCaptured/);
+  assert.match(artifacts.wiGithub, /permanentBuffsCaptured/);
+  assert.doesNotMatch(artifacts.tmdGithub, /characterShrineMap/);
+  assert.doesNotMatch(artifacts.wiGithub, /characterShrineMap/);
 });
 
 test("legacy TMD and WI publish entries always delegate to the dual-guild publisher", () => {

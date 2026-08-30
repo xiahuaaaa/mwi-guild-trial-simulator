@@ -53,6 +53,48 @@ test("exports skill, learned ability, and aura levels from game arrays", () => {
   assert.equal(snapshot.auras["/abilities/mystic_aura"], 40);
 });
 
+test("captures only confirmed house, achievement, and shrine records", () => {
+  const snapshot = build({
+    characterHouseRoomMap: {
+      "/house_rooms/dojo": { houseRoomHrid: "/house_rooms/dojo", level: 8 },
+      "/house_rooms/unknown": { houseRoomHrid: "/house_rooms/unknown", level: 8 },
+      "/house_rooms/forge": { level: 1.5 },
+      "/house_rooms/gym": { level: 9 },
+    },
+    characterAchievements: [
+      { achievementHrid: "/achievements/build_room_level_1", isCompleted: 1 },
+      { achievementHrid: "/achievements/unknown", isCompleted: true },
+      { achievementHrid: "/achievements/build_room_level_3", isCompleted: "true" },
+    ],
+    guildBuildingLevelMap: {
+      "/guild_shrines/force": 4,
+      "/shrines/tempo": { level: 2 },
+      "/guild_shrines/spirit": 21,
+      "/guild_shrines/rarity": 20,
+    },
+  });
+  assert.equal(snapshot.permanentBuffsCaptured, true);
+  assert.deepEqual(snapshot.houseRooms, { "/house_rooms/dojo": 8 });
+  assert.deepEqual(snapshot.achievements, { "/achievements/build_room_level_1": true });
+  assert.deepEqual(snapshot.shrines, { "/shrines/force": 4, "/shrines/tempo": 2 });
+});
+
+test("omits missing permanent containers without claiming a complete capture", () => {
+  const snapshot = build({ characterHouseRoomDict: {}, characterAchievements: [] });
+  assert.deepEqual(snapshot.houseRooms, {});
+  assert.deepEqual(snapshot.achievements, {});
+  assert.equal(Object.hasOwn(snapshot, "shrines"), false);
+  assert.equal(Object.hasOwn(snapshot, "permanentBuffsCaptured"), false);
+});
+
+test("empty confirmed permanent containers explicitly capture zero", () => {
+  const snapshot = build({ characterHouseRoomMap: {}, characterAchievements: [], guildBuildingLevelDict: {} });
+  assert.deepEqual(snapshot.houseRooms, {});
+  assert.deepEqual(snapshot.achievements, {});
+  assert.deepEqual(snapshot.shrines, {});
+  assert.equal(snapshot.permanentBuffsCaptured, true);
+});
+
 test("preserves combat and profession loadouts in the catalog", () => {
   const snapshot = build({
     loadouts: [

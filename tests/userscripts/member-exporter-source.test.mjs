@@ -46,7 +46,7 @@ test("page bridge normalizes real MWI wearable and ability maps", () => {
 });
 
 test("member exporter is a zero-configuration TMD uploader", () => {
-  assert.match(source, /@version\s+0\.6\.23/);
+  assert.match(source, /@version\s+0\.6\.25/);
   assert.match(source, /@name\s+TMD-guild-trial-sync/);
   assert.match(source, /@name:en\s+TMD-guild-trial-sync/);
   assert.match(source, /@match\s+https:\/\/www\.milkywayidlecn\.com\/\*/);
@@ -65,6 +65,20 @@ test("member exporter is a zero-configuration TMD uploader", () => {
   assert.match(source, /if \(pageContext\.__ADUDU_GUILD_TRIAL_BRIDGE__\) return;/);
   assert.doesNotMatch(source, /填写成员同步口令/);
   assert.doesNotMatch(source, /actionButton\("连接设置"/);
+});
+
+test("member exporter uses the confirmed character and guild containers for permanent data", () => {
+  assert.match(source, /characterHouseRoomMap/);
+  assert.match(source, /characterHouseRoomDict/);
+  assert.match(source, /houseRoomHrid/);
+  assert.match(source, /characterAchievements/);
+  assert.match(source, /characterAchievementMap/);
+  assert.match(source, /achievementHrid/);
+  assert.match(source, /isCompleted/);
+  assert.match(source, /guildBuildingLevelDict/);
+  assert.match(source, /guildBuildingLevelMap/);
+  assert.match(source, /permanentBuffsCaptured/);
+  assert.doesNotMatch(source, /characterShrineMap/);
 });
 
 test("automatic sync does not reschedule itself while building a snapshot", () => {

@@ -11,6 +11,52 @@
   const MAX_BUILDS = 4;
   const SENSITIVE_KEY = /(?:token|authorization|cookie|secret|password|credential|session|gm_)/i;
   const CONSUMABLE = /(?:food|drink|consumable|potion)/i;
+  const HOUSE_ROOM_HRIDS = new Set([
+    "/house_rooms/archery_range", "/house_rooms/armory", "/house_rooms/brewery", "/house_rooms/dairy_barn",
+    "/house_rooms/dining_room", "/house_rooms/dojo", "/house_rooms/forge", "/house_rooms/garden",
+    "/house_rooms/gym", "/house_rooms/kitchen", "/house_rooms/laboratory", "/house_rooms/library",
+    "/house_rooms/log_shed", "/house_rooms/mystical_study", "/house_rooms/observatory",
+    "/house_rooms/sewing_parlor", "/house_rooms/workshop",
+  ]);
+  const ACHIEVEMENT_HRIDS = new Set([
+    "/achievements/bestiary_points_100", "/achievements/bestiary_points_20", "/achievements/bestiary_points_200",
+    "/achievements/bestiary_points_40", "/achievements/bestiary_points_400", "/achievements/brew_gourmet_tea",
+    "/achievements/brew_ultra_magic_coffee", "/achievements/build_room_level_1", "/achievements/build_room_level_3",
+    "/achievements/build_room_level_6", "/achievements/build_room_level_8", "/achievements/buy_trainee_charm",
+    "/achievements/cheesesmith_azure_tool", "/achievements/clear_chimerical_den", "/achievements/clear_enchanted_fortress",
+    "/achievements/clear_pirate_cove", "/achievements/clear_sinister_circus", "/achievements/clear_t1_dungeon_10_times",
+    "/achievements/coinify_coins_1m", "/achievements/collect_branch_of_insight", "/achievements/collect_butter_of_proficiency",
+    "/achievements/collect_thread_of_expertise", "/achievements/collection_points_100", "/achievements/collection_points_1000",
+    "/achievements/collection_points_200", "/achievements/collection_points_2000", "/achievements/collection_points_500",
+    "/achievements/complete_tutorial", "/achievements/cook_apple_gummy", "/achievements/cook_peach_yogurt",
+    "/achievements/cook_spaceberry_cake", "/achievements/craft_celestial_tool_or_outfit", "/achievements/craft_dungeon_equipment",
+    "/achievements/craft_jewelry", "/achievements/craft_master_charm", "/achievements/craft_wooden_bow",
+    "/achievements/decompose_bamboo_gloves", "/achievements/defeat_chronofrost_sorcerer", "/achievements/defeat_crystal_colossus",
+    "/achievements/defeat_demonic_overlord_t1", "/achievements/defeat_dusk_revenant", "/achievements/defeat_gobo_chieftain",
+    "/achievements/defeat_jerry", "/achievements/defeat_jerry_t5", "/achievements/defeat_luna_empress",
+    "/achievements/defeat_marine_huntress", "/achievements/defeat_red_panda", "/achievements/defeat_shoebill",
+    "/achievements/defeat_stalactite_golem_t5", "/achievements/defeat_the_watcher", "/achievements/enhance_level_80_to_10",
+    "/achievements/enhance_level_90_to_10", "/achievements/enhance_to_10", "/achievements/enhance_to_3",
+    "/achievements/enhance_to_6", "/achievements/equip_expert_task_badge", "/achievements/equip_ginkgo_weapon",
+    "/achievements/gather_milk", "/achievements/labyrinth_floor_2", "/achievements/labyrinth_floor_4",
+    "/achievements/labyrinth_floor_6", "/achievements/labyrinth_floor_8", "/achievements/learn_ability",
+    "/achievements/learn_special_ability", "/achievements/refine_dungeon_equipment",
+    "/achievements/tailor_gluttonous_or_guzzling_pouch", "/achievements/tailor_medium_pouch",
+    "/achievements/tailor_umbral_tunic", "/achievements/task_tokens_10", "/achievements/total_level_100",
+    "/achievements/total_level_1000", "/achievements/total_level_1500", "/achievements/total_level_1800",
+    "/achievements/total_level_250", "/achievements/total_level_500", "/achievements/transmute_philosophers_stone",
+    "/achievements/woodcut_arcane_tree",
+  ]);
+  const SHRINE_HRIDS = Object.freeze({
+    "/guild_shrines/force": "/shrines/force",
+    "/guild_shrines/tempo": "/shrines/tempo",
+    "/guild_shrines/spirit": "/shrines/spirit",
+    "/guild_shrines/scholar": "/shrines/scholar",
+    "/shrines/force": "/shrines/force",
+    "/shrines/tempo": "/shrines/tempo",
+    "/shrines/spirit": "/shrines/spirit",
+    "/shrines/scholar": "/shrines/scholar",
+  });
 
   const object = (value) => value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const array = (value) => Array.isArray(value) ? value : [];
@@ -46,6 +92,69 @@
     if (!value || typeof value !== "object") return [];
     if (typeof value.entries === "function" && Number.isFinite(Number(value.size))) return [...value.entries()];
     return Object.entries(value);
+  }
+
+  function sourceEntries(value) {
+    return Array.isArray(value) ? value.map((entry, index) => [String(index), entry]) : mapEntries(value);
+  }
+
+  function boundedInteger(value, max) {
+    if (value == null || (typeof value === "string" && value.trim() === "")) return null;
+    if (typeof value !== "number" && typeof value !== "string") return null;
+    const number = Number(value);
+    return Number.isInteger(number) && number >= 0 && number <= max ? number : null;
+  }
+
+  function houseRoomsFrom(value) {
+    const result = {};
+    for (const [mapKey, raw] of sourceEntries(value)) {
+      const row = object(raw);
+      const hrid = text(row.houseRoomHrid ?? mapKey);
+      const level = boundedInteger(row.level ?? raw, 8);
+      if (HOUSE_ROOM_HRIDS.has(hrid) && level != null) result[hrid] = level;
+    }
+    return result;
+  }
+
+  function achievementsFrom(value) {
+    const result = {};
+    for (const [mapKey, raw] of sourceEntries(value)) {
+      const row = object(raw);
+      const hrid = text(row.achievementHrid ?? mapKey);
+      const completed = raw && typeof raw === "object" && !Array.isArray(raw) && Object.hasOwn(raw, "isCompleted")
+        ? raw.isCompleted
+        : raw;
+      if (!ACHIEVEMENT_HRIDS.has(hrid)) continue;
+      if (completed !== true && completed !== false && completed !== 0 && completed !== 1) continue;
+      result[hrid] = completed === true || completed === 1;
+    }
+    return result;
+  }
+
+  function shrinesFrom(value) {
+    const result = {};
+    for (const [mapKey, raw] of sourceEntries(value)) {
+      const hrid = SHRINE_HRIDS[text(mapKey)];
+      const row = object(raw);
+      const level = boundedInteger(row.level ?? raw, 20);
+      if (hrid && level != null) result[hrid] = level;
+    }
+    return result;
+  }
+
+  function permanentCaptureFields(source, character) {
+    const houseSource = source.characterHouseRoomMap ?? source.characterHouseRoomDict
+      ?? character.characterHouseRoomMap ?? character.characterHouseRoomDict;
+    const achievementSource = source.characterAchievements ?? source.characterAchievementMap
+      ?? character.characterAchievements ?? character.characterAchievementMap;
+    const shrineSource = source.guildBuildingLevelDict ?? source.guildBuildingLevelMap
+      ?? character.guildBuildingLevelDict ?? character.guildBuildingLevelMap;
+    const result = {};
+    if (houseSource != null) result.houseRooms = houseRoomsFrom(houseSource);
+    if (achievementSource != null) result.achievements = achievementsFrom(achievementSource);
+    if (shrineSource != null) result.shrines = shrinesFrom(shrineSource);
+    if (houseSource != null && achievementSource != null && shrineSource != null) result.permanentBuffsCaptured = true;
+    return result;
   }
 
   function equipmentFromLoadout(loadout) {
@@ -381,6 +490,7 @@
       skills: levels(source.skills ?? character.skills),
       learnedAbilities: levels(source.learnedAbilities ?? character.learnedAbilities),
       auras: levels(source.auras ?? character.auras),
+      ...permanentCaptureFields(source, character),
       loadoutCatalog,
       approvedBuilds,
       participation: {
