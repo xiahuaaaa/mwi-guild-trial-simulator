@@ -341,7 +341,7 @@ export function weaponFor(build) {
   );
 }
 
-function weaponMatchesRole(entry, role) {
+export function weaponMatchesRole(entry, role) {
   const detail = itemDetailMap[entry.itemHrid];
   const type = detail?.equipmentDetail?.type;
   const stats = detail?.equipmentDetail?.combatStats ?? {};

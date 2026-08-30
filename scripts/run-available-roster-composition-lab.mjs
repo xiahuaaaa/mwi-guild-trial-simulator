@@ -27,6 +27,14 @@ import {
 } from "../packages/optimizer/src/combat-member-readiness.mjs";
 import { PRIMARY_SKILL_BY_ROLE } from "../packages/optimizer/src/combat-weapon-check.mjs";
 import {
+  combatEligibilityNote,
+  combatReadinessOptionsForGuild,
+  defaultTeamCapForGuild,
+  formatShieldCapReason,
+  keepTopShieldsByDefense,
+  shieldsPerSideForGuild,
+} from "../packages/optimizer/src/combat-eligibility-policy.mjs";
+import {
   NATURE_DPS_MIDDLE_SLOTS,
   WATER_DPS_MIDDLE_SLOTS,
   WATER_SUPPORT_COUNTS,
@@ -43,8 +51,11 @@ import {
 } from "./weekly-combat-boss-pair.mjs";
 import {
   applyTeamCaps,
+  guardianAuraLevel,
   pairStrategyForStKey,
   partitionPoliciesForStrategy,
+  pickHighestGuardianAuraCarrier,
+  pinMinimumRoleCounts,
   preferHighestMysticAuraOn,
   rebalancePhysicalToward,
 } from "./weekly-combat-partition.mjs";
@@ -58,29 +69,28 @@ const apiBase = (
 ).replace(/\/$/, "");
 const adminKey = process.env.MWI_GUILD_API_ADMIN_KEY;
 const guildId = process.env.MWI_GUILD_ID ?? "TMD";
+const { resolveGuildReportPaths, parseExcludedMemberIds, labArtifactKind } = await import(
+  new URL("../apps/qq-bot/src/guild-report-paths.ts", import.meta.url).href
+);
+const guildPaths = resolveGuildReportPaths(guildId, projectDirectory);
 const fixturePath = path.join(
   projectDirectory,
   process.env.MWI_GUILD_TRIAL_FIXTURE ??
     "fixtures/monsters/guild-trial-2026-08-28-chameleon-swarm.json",
 );
-const outputPath = path.join(
-  projectDirectory,
-  ".local/tmd-available-roster-composition-lab.json",
-);
+const outputPath = guildPaths.availableRosterLabJsonPath;
 const screeningDurationSeconds = Number(
   process.env.MWI_GUILD_SCREEN_DURATION_SECONDS ?? 180,
 );
 const finalDurationSeconds = Number(
   process.env.MWI_GUILD_FINAL_DURATION_SECONDS ?? 3600,
 );
-const teamCap = Number(process.env.MWI_GUILD_TEAM_CAP ?? 52);
-const excludedMemberIds = new Set(
-  String(process.env.MWI_GUILD_EXCLUDE_MEMBERS ?? "xlsx,LBDYS,sh1ro")
-    .split(/[,，\s]+/u)
-    .map((name) => name.trim())
-    .filter(Boolean)
-    .map((name) => name.toLocaleLowerCase()),
+const teamCap = Number(
+  process.env.MWI_GUILD_TEAM_CAP ?? defaultTeamCapForGuild(guildId),
 );
+const readinessOptions = combatReadinessOptionsForGuild(guildId);
+const shieldsPerSide = shieldsPerSideForGuild(guildId);
+const excludedMemberIds = parseExcludedMemberIds(guildId);
 const workerCount = Math.max(
   1,
   Number(process.env.MWI_GUILD_SIM_WORKERS ?? Math.min(8, os.cpus().length || 4)),
@@ -195,7 +205,11 @@ for (const binding of bindingsData.bindings) {
     continue;
   }
   const snapshot = memberMap.get(binding.memberId)?.latestSnapshot;
-  const readiness = assessCombatMemberReadiness(snapshot, binding.combatType);
+  const readiness = assessCombatMemberReadiness(
+    snapshot,
+    binding.combatType,
+    readinessOptions,
+  );
   if (!readiness.ok) {
     unavailable.push({
       memberId: binding.memberId,
@@ -225,6 +239,20 @@ for (const binding of bindingsData.bindings) {
 for (const rows of usableByRole.values()) {
   rows.sort((left, right) => left.memberId.localeCompare(right.memberId));
 }
+if (shieldsPerSide != null) {
+  const { kept, dropped } = keepTopShieldsByDefense(
+    usableByRole.get("盾") ?? [],
+    shieldsPerSide * 2,
+  );
+  usableByRole.set("盾", kept);
+  for (const row of dropped) {
+    unavailable.push({
+      memberId: row.memberId,
+      combatType: "盾",
+      reason: formatShieldCapReason(row, shieldsPerSide),
+    });
+  }
+}
 
 const availableCount = sumMap(usableByRole);
 const boundDistribution = Object.fromEntries(
@@ -237,7 +265,7 @@ const partitionPolicies = partitionPoliciesForStrategy(pairStrategy);
 process.stdout.write(
   `可用绑定 ${availableCount} 人（不可用 ${unavailable.length}）；` +
     `职业 ${formatCounts(boundDistribution)}；每场上限 ${teamCap}；并行 ${workerCount}。\n` +
-    `说明：不按报名；排除 ${[...excludedMemberIds].join("/")}；${pairStrategy.ruleNote}；两边各留至少2个必要覆盖；自然全治疗；非光环默认复活、前x输出改疯狂；攻击≥${GUILD_TRIAL_MIN_ATTACK_LEVEL}。\n`,
+    `说明：不按报名；排除 ${[...excludedMemberIds].join("/")}；${pairStrategy.ruleNote}；两边各留至少2个必要覆盖；盾平均分配，每边最高守护光环等级者带守护、其余盾复活；自然全治疗；非光环默认复活、前x输出改疯狂；${combatEligibilityNote(guildId, GUILD_TRIAL_MIN_ATTACK_LEVEL)}。\n`,
 );
 
 const simPool = createSimPool(workerCount);
@@ -534,7 +562,7 @@ try {
 
   const assignment = {
     schemaVersion: 1,
-    kind: "tmd-available-roster-composition-lab",
+    kind: labArtifactKind(guildId, "available-roster-composition-lab"),
     developmentOnly: true,
     promotable: false,
     guildId,
@@ -555,6 +583,9 @@ try {
       missingOrdinarySkillsDefaultLevel: 40,
       missingReviveInsanityDefaultLevel: 1,
       minAttackLevel: GUILD_TRIAL_MIN_ATTACK_LEVEL,
+      minPrimaryLevel: readinessOptions.minPrimaryLevel ?? null,
+      minWeaponItemLevel: readinessOptions.minWeaponItemLevel ?? null,
+      shieldsPerSide,
       abilityTemplates: {
         [weekly.stKey]: isSingleTargetBossKey(weekly.stKey)
           ? `${weekly.stKey}-st-2026-08-28`
@@ -565,7 +596,7 @@ try {
         ? "aura-carriers-then-revive-top-dps-insanity"
         : "aura-carriers-then-revive",
       insanityTopDps: insanityTopDpsCounts,
-      auraAssignment: "guardian-on-shield-highest-level-elsewhere",
+      auraAssignment: "guardian-on-highest-shield-others-revive",
       healerKit:
         "st-rejuvenate-affinity-life_drain-entangle (lowest-3 pollen) / aoe-rejuvenate-pollen-veil-entangle",
       seeds,
@@ -577,7 +608,7 @@ try {
       boundDistribution,
       unavailable,
       note:
-        `不使用报名名单。排除 xlsx/LBDYS/sh1ro。${pairStrategy.ruleNote}；两边各留至少2个必要覆盖；自然全治疗；非光环默认复活、前x输出改疯狂${formatInsanityCounts(insanityTopDpsCounts)}；攻击≥${GUILD_TRIAL_MIN_ATTACK_LEVEL}。`,
+        `不使用报名名单。排除 ${[...excludedMemberIds].join("/") || "无"}。${pairStrategy.ruleNote}；两边各留至少2个必要覆盖；盾平均分配，每边最高守护光环等级者带守护、其余盾复活；自然全治疗；非光环默认复活、前x输出改疯狂${formatInsanityCounts(insanityTopDpsCounts)}；${combatEligibilityNote(guildId, GUILD_TRIAL_MIN_ATTACK_LEVEL)}。`,
     },
     partitionSearch: screenedPartitions.map((row) => ({
       id: row.policy.id,
@@ -605,6 +636,15 @@ function partitionAvailableMembers(allSourcesByRole, policy) {
   const swarm = new Map(roleOrder.map((role) => [role, []]));
   for (const role of roleOrder) {
     const sources = [...(allSourcesByRole.get(role) ?? [])];
+    if (role === "盾") {
+      sources.sort(
+        (left, right) =>
+          guardianAuraLevel(right) - guardianAuraLevel(left) ||
+          snapshotSkillLevel(right.snapshot, "/skills/defense") -
+            snapshotSkillLevel(left.snapshot, "/skills/defense") ||
+          left.memberId.localeCompare(right.memberId),
+      );
+    }
     for (let index = 0; index < sources.length; index += 1) {
       const side = policy.assign(role, index, sources.length);
       (side === "chameleon" ? chameleon : swarm).get(role).push(sources[index]);
@@ -647,7 +687,11 @@ function capTeamPool(poolByRole, cap) {
     );
   } else {
     const counts = countRoles(rankedByRole);
-    const targets = proportionalRoleTargets(counts, cap);
+    const targets = pinMinimumRoleCounts(
+      proportionalRoleTargets(counts, cap),
+      { 盾: counts.盾 ?? 0 },
+      cap,
+    );
     capped = new Map(roleOrder.map((role) => [role, []]));
     for (const role of roleOrder) {
       capped.set(
@@ -1142,7 +1186,8 @@ function compareLowDpsCoverageFirst(left, right) {
 }
 
 /**
- * Guardian Aura is fixed on 盾; remaining auras go to highest-level carriers.
+ * One 盾 carries Guardian Aura (highest learned level); other tanks revive.
+ * Remaining auras go to highest-level non-shield carriers.
  */
 function assignAuras(team) {
   for (const member of team) member.auraHrid = null;
@@ -1160,10 +1205,11 @@ function assignAuras(team) {
         `${member.memberId} is bound as 盾 but has not learned Guardian Aura`,
       );
     }
-    member.auraHrid = "/abilities/guardian_aura";
-    unused.delete(member);
   }
-  if (shields.length) {
+  const guardianCarrier = pickHighestGuardianAuraCarrier(shields);
+  if (guardianCarrier) {
+    guardianCarrier.auraHrid = "/abilities/guardian_aura";
+    unused.delete(guardianCarrier);
     remainingAuras.delete("/abilities/guardian_aura");
   }
 
@@ -1406,10 +1452,10 @@ function dutyName(duty) {
 
 function buildSummary(winner, availableCount, unavailableRows) {
   const lines = [
-    "TMD 可用人员重排组合搜索（不按报名，开发实验不可转正）",
+    `${guildId} 可用人员重排组合搜索（不按报名，开发实验不可转正）`,
     `可用 ${availableCount} 人；不可用 ${unavailableRows.length} 人；` +
       `最优分区：${winner.partitionId}`,
-    `规则：${pairStrategy.ruleNote}；两边各留至少2个必要覆盖（烟爆/法力喷泉/冰霜爆裂/粉尘/疫病/破甲/碎裂/致残/血刃）；变色龙单体、虫群AOE；自然全治疗；非光环默认复活、前x输出改疯狂${formatInsanityCounts(insanityTopDpsCounts)}；攻击≥${GUILD_TRIAL_MIN_ATTACK_LEVEL}；双 Boss 人员互斥；无复制人。`,
+    `规则：${pairStrategy.ruleNote}；两边各留至少2个必要覆盖（烟爆/法力喷泉/冰霜爆裂/粉尘/疫病/破甲/碎裂/致残/血刃）；盾平均分配，每边最高守护光环等级者带守护、其余盾复活；变色龙单体、虫群AOE；自然全治疗；非光环默认复活、前x输出改疯狂${formatInsanityCounts(insanityTopDpsCounts)}；${combatEligibilityNote(guildId, GUILD_TRIAL_MIN_ATTACK_LEVEL)}；双 Boss 人员互斥；无复制人。`,
   ];
   for (const boss of winner.bosses) {
     const layers = boss.runs.map((run) => run.wavesCleared);

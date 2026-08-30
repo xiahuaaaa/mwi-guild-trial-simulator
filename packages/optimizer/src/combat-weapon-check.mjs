@@ -1,6 +1,9 @@
 import itemDetailMap from "../../shykai-full-runtime/generated/src/combatsimulator/data/itemDetailMap.json.js";
 import { selectCombatBuild, weaponFor } from "./combat-build-selection.mjs";
+import { PRIMARY_SKILL_BY_ROLE } from "./combat-eligibility-policy.mjs";
 import { assessCombatMemberReadiness } from "./combat-member-readiness.mjs";
+
+export { PRIMARY_SKILL_BY_ROLE };
 
 /**
  * Flag available combat members whose selected main weapon enhancement is
@@ -19,18 +22,6 @@ export const COMBAT_ROLE_ORDER = [
   "剑",
   "锤",
 ];
-
-export const PRIMARY_SKILL_BY_ROLE = {
-  弓: { skillHrid: "/skills/ranged", label: "远程" },
-  弩: { skillHrid: "/skills/ranged", label: "远程" },
-  火: { skillHrid: "/skills/magic", label: "魔法" },
-  水: { skillHrid: "/skills/magic", label: "魔法" },
-  自: { skillHrid: "/skills/magic", label: "魔法" },
-  盾: { skillHrid: "/skills/defense", label: "防御" },
-  枪: { skillHrid: "/skills/melee", label: "近战" },
-  剑: { skillHrid: "/skills/melee", label: "近战" },
-  锤: { skillHrid: "/skills/melee", label: "近战" },
-};
 
 const WEAPON_NAME_ZH = {
   "Cursed Bow": "咒怨之弓",

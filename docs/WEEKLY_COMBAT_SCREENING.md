@@ -1,6 +1,6 @@
 # 每周战斗试炼筛选流程
 
-更新时间：2026-08-28（Asia/Shanghai）  
+更新时间：2026-08-30（Asia/Shanghai）  
 权威位置：本文。组合实验室、疯狂人数、自然奶转输出、发布脚本的默认行为以代码为准；改流程先改脚本再改本文。
 
 每周五 `00:00 UTC` 公会周重置后，用户说「做本周战斗模拟」时走这条流水线。  
@@ -33,8 +33,9 @@
 - 开发目录 `guild-trial-simulator/` 与运行副本 `/Users/xhy/.local/share/mwi-guild-server` 相互独立。
 - 密钥从 LaunchAgent 的 `api.env` 注入，**不要打印、复制、提交**。`api.env` 第 5 行有一处未加引号的路径，source 时可能警告 `qrcode.png`，忽略即可，key 仍会加载。
 - `npm test` **不要**先 source `api.env`：会泄漏 `MWI_TMD_ROSTER_REPORTERS` / NapCat token，弄挂 API 测试。
-- 默认排除不参加的人：`xlsx,LBDYS,sh1ro`（`MWI_GUILD_EXCLUDE_MEMBERS`）。
+- 默认排除不参加的人：TMD `xlsx,LBDYS,sh1ro`（`MWI_GUILD_EXCLUDE_MEMBERS`）；WI 默认不排除。
 - 攻击等级 `<110`、缺对应职业装备的人实验室会标不可用。
+- **WI 额外门槛（TMD 不变）**：绑定职业主属性 `<125` 不能进模拟（弓/弩=远程，枪/剑/锤=近战，火/水/自=魔法，盾=防御）；必须拥有该职业的 T95 或精炼★T95 武器；两边各只带 2 盾，按防御从高到低留 4 人、去掉其余盾。WI 默认每场上限 48。
 - 不解除 `simulationEngine: unavailable`，不用复制人冒充正式方案。
 
 本地跑筛选时：
@@ -45,6 +46,7 @@ source /Users/xhy/.local/share/mwi-guild-server/config/api.env
 set +a
 export MWI_GUILD_API_BASE="${MWI_GUILD_API_BASE:-http://127.0.0.1:8787}"
 cd /Users/xhy/Downloads/mwi/guild-trial-simulator
+# WI：MWI_GUILD_ID=WI（默认上限 48、主属性≥125、T95 武器、每边 2 盾）
 ```
 
 ---
@@ -134,7 +136,8 @@ node scripts/weekly-combat-fixture.mjs \
 固定规则（对所有 ST+虫群周）：
 
 - 两边各留 ≥2 个必要覆盖座位（人数不够时按 `coverageReserve` 降到至少 1）。
-- 盾主坦跟 `shieldPrimary`（变色龙周在单体；獾周在虫群）。
+- 盾平均分配到两边（偶数下标跟 `shieldPrimary`：变色龙周在单体；獾周在虫群）。人数为偶数则各半。
+- 每边只有守护光环等级最高的那名盾带守护光环，其余盾第 1 格复活。
 - 神秘光环优先到 `mysticAuraSide`。
 - 物理再平衡：高等级物理可换到 `physicalRebalanceSide`（变色龙周补单体）。
 - 超人数一侧溢到未满一侧（`applyTeamCaps`）。
@@ -255,7 +258,7 @@ node scripts/run-and-publish-combat-assignment.mjs --skip-sim
 | 变量 | 默认 | 含义 |
 |---|---|---|
 | `MWI_GUILD_TRIAL_FIXTURE` | 当前周 json | monster fixture |
-| `MWI_GUILD_TEAM_CAP` | 52 | 每场人数上限 |
+| `MWI_GUILD_TEAM_CAP` | TMD 52 / WI 48 | 每场人数上限 |
 | `MWI_GUILD_EXCLUDE_MEMBERS` | `xlsx,LBDYS,sh1ro` | 手动排除 |
 | `MWI_GUILD_SCREEN_DURATION_SECONDS` | 180 | 单体技能包筛 |
 | `MWI_GUILD_AOE_SCREEN_DURATION_SECONDS` | 实验室 AOE 包=3600；A/B=1800 | 短筛时长 |

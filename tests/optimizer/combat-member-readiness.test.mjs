@@ -15,6 +15,7 @@ import {
   memberMeetsGuildTrialAttackThreshold,
   readAttackLevelFromSnapshot,
 } from "../../packages/optimizer/src/combat-member-readiness.mjs";
+import { combatReadinessOptionsForGuild } from "../../packages/optimizer/src/combat-eligibility-policy.mjs";
 import { defaultAbility } from "../../packages/shykai-full-runtime/src/guild-trial-runner.mjs";
 
 test("auras and invincible are not defaultable; revive/insanity default to Lv1", () => {
@@ -166,4 +167,81 @@ test("applyDefaultMissingSkillLevels skips auras and fills ordinary skills", () 
   assert.equal(next.learnedAbilities["/abilities/speed_aura"], undefined);
   assert.equal(next.learnedAbilities["/abilities/precision"], 40);
   assert.equal(next.learnedAbilities["/abilities/insanity"], 1);
+});
+
+function combatReadySnapshot({
+  weaponHrid,
+  rangedLevel = 150,
+  attackLevel = 130,
+} = {}) {
+  return {
+    skills: {
+      "/skills/attack": attackLevel,
+      "/skills/ranged": rangedLevel,
+      "/skills/magic": 140,
+      "/skills/melee": 145,
+      "/skills/defense": 130,
+    },
+    learnedAbilities: {},
+    loadoutCatalog: [
+      {
+        name: "战斗",
+        category: "combat",
+        issues: [],
+        equipment: [
+          { itemHrid: weaponHrid, enhancementLevel: 10 },
+          { itemHrid: "/items/magicians_hat_refined", enhancementLevel: 10 },
+          { itemHrid: "/items/royal_water_robe_top_refined", enhancementLevel: 10 },
+          { itemHrid: "/items/royal_water_robe_bottoms_refined", enhancementLevel: 10 },
+          { itemHrid: "/items/pathseeker_boots_refined", enhancementLevel: 10 },
+        ],
+      },
+    ],
+  };
+}
+
+test("TMD default still accepts a T80 weapon when attack is ≥110", () => {
+  const readiness = assessCombatMemberReadiness(
+    combatReadySnapshot({ weaponHrid: "/items/arcane_crossbow" }),
+    "弩",
+  );
+  assert.equal(readiness.ok, true);
+});
+
+test("WI readiness blocks primary skill below 125", () => {
+  const readiness = assessCombatMemberReadiness(
+    combatReadySnapshot({
+      weaponHrid: "/items/sundering_crossbow",
+      rangedLevel: 124,
+    }),
+    "弩",
+    combatReadinessOptionsForGuild("WI"),
+  );
+  assert.equal(readiness.ok, false);
+  assert.match(readiness.reason, /远程等级不足（124<125）/u);
+});
+
+test("WI readiness requires T95 or refined T95 weapons", () => {
+  const options = combatReadinessOptionsForGuild("WI");
+  const t80 = assessCombatMemberReadiness(
+    combatReadySnapshot({ weaponHrid: "/items/arcane_crossbow" }),
+    "弩",
+    options,
+  );
+  assert.equal(t80.ok, false);
+  assert.match(t80.reason, /缺少T95或精炼★T95武器/u);
+
+  const t95 = assessCombatMemberReadiness(
+    combatReadySnapshot({ weaponHrid: "/items/sundering_crossbow" }),
+    "弩",
+    options,
+  );
+  assert.equal(t95.ok, true);
+
+  const refined = assessCombatMemberReadiness(
+    combatReadySnapshot({ weaponHrid: "/items/sundering_crossbow_refined" }),
+    "弩",
+    options,
+  );
+  assert.equal(refined.ok, true);
 });

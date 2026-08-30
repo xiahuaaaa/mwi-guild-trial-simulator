@@ -4,6 +4,11 @@ import {
   defaultLevelForMissingAbility,
 } from "../../shykai-full-runtime/src/ability-level-defaults.mjs";
 import { officialAbilityNameZh } from "../../mwi-data/official-zh-ability-names.mjs";
+import {
+  memberOwnsRoleWeaponAtItemLevel,
+  primarySkillForRole,
+  readPrimarySkillLevel,
+} from "./combat-eligibility-policy.mjs";
 
 /** Guild combat trial participation floor (snapshot `/skills/attack`). */
 export const GUILD_TRIAL_MIN_ATTACK_LEVEL = 110;
@@ -112,7 +117,15 @@ export function prepareSnapshotForCombat(snapshot, combatType) {
   return applyDefaultMissingSkillLevels(snapshot, combatType).snapshot;
 }
 
-export function assessCombatMemberReadiness(snapshot, combatType) {
+export function assessCombatMemberReadiness(
+  snapshot,
+  combatType,
+  options = {},
+) {
+  const minAttackLevel =
+    options.minAttackLevel ?? GUILD_TRIAL_MIN_ATTACK_LEVEL;
+  const minPrimaryLevel = options.minPrimaryLevel ?? null;
+  const minWeaponItemLevel = options.minWeaponItemLevel ?? null;
   if (!combatType) {
     return { ok: false, reason: "未绑定 QQ 战斗职业" };
   }
@@ -123,22 +136,58 @@ export function assessCombatMemberReadiness(snapshot, combatType) {
   if (attackLevel === null) {
     return {
       ok: false,
-      reason: `快照缺少攻击等级（需≥${GUILD_TRIAL_MIN_ATTACK_LEVEL}）`,
+      reason: `快照缺少攻击等级（需≥${minAttackLevel}）`,
       attackLevel: null,
-      minAttackLevel: GUILD_TRIAL_MIN_ATTACK_LEVEL,
+      minAttackLevel,
     };
   }
-  if (attackLevel < GUILD_TRIAL_MIN_ATTACK_LEVEL) {
+  if (attackLevel < minAttackLevel) {
     return {
       ok: false,
-      reason: `攻击等级不足（${attackLevel}<${GUILD_TRIAL_MIN_ATTACK_LEVEL}）`,
+      reason: `攻击等级不足（${attackLevel}<${minAttackLevel}）`,
       attackLevel,
-      minAttackLevel: GUILD_TRIAL_MIN_ATTACK_LEVEL,
+      minAttackLevel,
     };
+  }
+  if (minPrimaryLevel != null) {
+    const primary = primarySkillForRole(combatType);
+    const primaryLevel = readPrimarySkillLevel(snapshot, combatType);
+    if (primaryLevel === null) {
+      return {
+        ok: false,
+        reason: `快照缺少${primary.label}等级（需≥${minPrimaryLevel}）`,
+        primaryLabel: primary.label,
+        primaryLevel: null,
+        minPrimaryLevel,
+      };
+    }
+    if (primaryLevel < minPrimaryLevel) {
+      return {
+        ok: false,
+        reason: `${primary.label}等级不足（${primaryLevel}<${minPrimaryLevel}）`,
+        primaryLabel: primary.label,
+        primaryLevel,
+        minPrimaryLevel,
+      };
+    }
   }
   const buildSelection = selectCombatBuild(snapshot, combatType);
   if (!buildSelection.build) {
     return { ok: false, reason: "快照缺少可用的对应职业装备" };
+  }
+  if (
+    minWeaponItemLevel != null &&
+    !memberOwnsRoleWeaponAtItemLevel(
+      snapshot,
+      combatType,
+      minWeaponItemLevel,
+    )
+  ) {
+    return {
+      ok: false,
+      reason: "缺少T95或精炼★T95武器",
+      minWeaponItemLevel,
+    };
   }
 
   const missingCore = missingAbilityHrids(
