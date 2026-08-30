@@ -16,6 +16,13 @@ parentPort.on("message", async (task) => {
       id: task.id,
       run: {
         seed: run.seed,
+        combatRulesVersion: run.combatRulesVersion,
+        permanentBuffsEnabled: run.permanentBuffsEnabled,
+        stopReason: run.stopReason,
+        endedAt: run.endedAt,
+        simulatedTime: run.simulatedTime,
+        finalMonsterLevel: run.finalMonsterLevel,
+        livingEnemies: run.livingEnemies,
         wavesCleared: run.wavesCleared,
         finalMonsterHp: run.finalMonsterHp,
         finalMonsterMaxHp: run.finalMonsterMaxHp,

@@ -28,6 +28,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { assertCombatRulesVersion } from "../packages/shykai-full-runtime/src/combat-rules-version.mjs";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dryRun = process.argv.includes("--dry-run");
 const skipSim = process.argv.includes("--skip-sim");
@@ -71,6 +72,7 @@ if (!skipSim) {
 }
 
 const assignment = JSON.parse(readFileSync(assignmentJsonPath, "utf8"));
+assertCombatRulesVersion(assignment, assignmentJsonPath);
 if (!assignment?.generatedAt) {
   throw new Error(`assignment JSON missing generatedAt: ${assignmentJsonPath}`);
 }

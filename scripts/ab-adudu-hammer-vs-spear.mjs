@@ -14,6 +14,7 @@ import {
   buildPlayerMember,
   defaultAbility,
 } from "../packages/shykai-full-runtime/src/guild-trial-runner.mjs";
+import { assertCombatRulesVersion } from "../packages/shykai-full-runtime/src/combat-rules-version.mjs";
 import { selectCombatBuild } from "../packages/optimizer/src/combat-build-selection.mjs";
 import { prepareSnapshotForCombat } from "../packages/optimizer/src/combat-member-readiness.mjs";
 
@@ -44,6 +45,7 @@ const lab = JSON.parse(
     "utf8",
   ),
 );
+assertCombatRulesVersion(lab, path.join(projectDirectory, ".local/tmd-available-roster-composition-lab.json"));
 const fixture = JSON.parse(
   await readFile(
     path.join(

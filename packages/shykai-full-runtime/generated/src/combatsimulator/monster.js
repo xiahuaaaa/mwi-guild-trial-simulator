@@ -14,6 +14,7 @@ class Monster extends CombatUnit {
         super();
 
         this.isPlayer = false;
+        this.dataHrid = hrid;
         this.hrid = hrid;
         this.difficultyTier = difficultyTier;
         this.roomLevel = roomLevel
@@ -21,7 +22,7 @@ class Monster extends CombatUnit {
             this.roomLevel = this.LabyrinthMonsterBaseRoomLevel;
         }
 
-        let gameMonster = combatMonsterDetailMap[this.hrid];
+        let gameMonster = combatMonsterDetailMap[this.dataHrid];
         if (!gameMonster) {
             throw new Error("No monster found for hrid: " + this.hrid);
         }
@@ -48,7 +49,7 @@ class Monster extends CombatUnit {
     }
 
     updateCombatDetails() {
-        let gameMonster = combatMonsterDetailMap[this.hrid];
+        let gameMonster = combatMonsterDetailMap[this.dataHrid];
 
         let levelMultiplier = 1.0 + 0.25 * this.difficultyTier;
         let defLevelMultiplier = 1.0 + 0.15 * this.difficultyTier;

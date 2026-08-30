@@ -42,6 +42,11 @@ class SimResult {
         this.lastDungeonFinishTime = 0;
         this.lastEncounterFinishTime = 0;
         this.labyAttemptCount = 0;
+        this.stopReason = null;
+        this.endedAt = null;
+        this.simulatedTime = 0;
+        this.finalMonsterLevel = null;
+        this.livingEnemies = [];
 
         this.wipeEvents = [];
         
@@ -62,11 +67,12 @@ class SimResult {
     }
     
     addDeath(unit) {
-        if (!this.deaths[unit.hrid]) {
-            this.deaths[unit.hrid] = 0;
+        const hrid = unitHrid(unit);
+        if (!this.deaths[hrid]) {
+            this.deaths[hrid] = 0;
         }
 
-        this.deaths[unit.hrid] += 1;
+        this.deaths[hrid] += 1;
     }
 
     updateTimeSpentAlive(name, alive, time) {
@@ -108,8 +114,9 @@ class SimResult {
             return;
         }
 
-        if (!this.experienceGained[unit.hrid]) {
-            this.experienceGained[unit.hrid] = {
+        const hrid = unitHrid(unit);
+        if (!this.experienceGained[hrid]) {
+            this.experienceGained[hrid] = {
                 stamina: 0,
                 intelligence: 0,
                 attack: 0,
@@ -150,7 +157,7 @@ class SimResult {
 
             const skillExperience = rate * (1 + unit.combatDetails.combatStats[type + "Experience"]);
 
-            this.experienceGained[unit.hrid][type] += (
+            this.experienceGained[hrid][type] += (
                 experience
                 * (1 + unit.combatDetails.combatStats.combatExperience)
                 * skillExperience
@@ -165,122 +172,132 @@ class SimResult {
     }
 
     addAttack(source, target, ability, hit) {
-        if (!this.attacks[source.hrid]) {
-            this.attacks[source.hrid] = {};
+        const sourceHrid = unitHrid(source);
+        const targetHrid = unitHrid(target);
+        if (!this.attacks[sourceHrid]) {
+            this.attacks[sourceHrid] = {};
         }
-        if (!this.attacks[source.hrid][target.hrid]) {
-            this.attacks[source.hrid][target.hrid] = {};
+        if (!this.attacks[sourceHrid][targetHrid]) {
+            this.attacks[sourceHrid][targetHrid] = {};
         }
-        if (!this.attacks[source.hrid][target.hrid][ability]) {
-            this.attacks[source.hrid][target.hrid][ability] = {};
-        }
-
-        if (!this.attacks[source.hrid][target.hrid][ability][hit]) {
-            this.attacks[source.hrid][target.hrid][ability][hit] = 0;
+        if (!this.attacks[sourceHrid][targetHrid][ability]) {
+            this.attacks[sourceHrid][targetHrid][ability] = {};
         }
 
-        this.attacks[source.hrid][target.hrid][ability][hit] += 1;
+        if (!this.attacks[sourceHrid][targetHrid][ability][hit]) {
+            this.attacks[sourceHrid][targetHrid][ability][hit] = 0;
+        }
+
+        this.attacks[sourceHrid][targetHrid][ability][hit] += 1;
     }
 
     addConsumableUse(unit, consumable) {
-        if (!this.consumablesUsed[unit.hrid]) {
-            this.consumablesUsed[unit.hrid] = {};
+        const hrid = unitHrid(unit);
+        if (!this.consumablesUsed[hrid]) {
+            this.consumablesUsed[hrid] = {};
         }
-        if (!this.consumablesUsed[unit.hrid][consumable.hrid]) {
-            this.consumablesUsed[unit.hrid][consumable.hrid] = 0;
+        if (!this.consumablesUsed[hrid][consumable.hrid]) {
+            this.consumablesUsed[hrid][consumable.hrid] = 0;
         }
 
-        this.consumablesUsed[unit.hrid][consumable.hrid] += 1;
+        this.consumablesUsed[hrid][consumable.hrid] += 1;
     }
 
     addHitpointsGained(unit, source, amount) {
-        if (!this.hitpointsGained[unit.hrid]) {
-            this.hitpointsGained[unit.hrid] = {};
+        const hrid = unitHrid(unit);
+        if (!this.hitpointsGained[hrid]) {
+            this.hitpointsGained[hrid] = {};
         }
-        if (!this.hitpointsGained[unit.hrid][source]) {
-            this.hitpointsGained[unit.hrid][source] = 0;
+        if (!this.hitpointsGained[hrid][source]) {
+            this.hitpointsGained[hrid][source] = 0;
         }
 
-        this.hitpointsGained[unit.hrid][source] += amount;
+        this.hitpointsGained[hrid][source] += amount;
     }
 
     addHealingDone(unit, abilityHrid, amount) {
-        if (!this.healingDone[unit.hrid]) {
-            this.healingDone[unit.hrid] = {};
+        const hrid = unitHrid(unit);
+        if (!this.healingDone[hrid]) {
+            this.healingDone[hrid] = {};
         }
-        if (!this.healingDone[unit.hrid][abilityHrid]) {
-            this.healingDone[unit.hrid][abilityHrid] = 0;
+        if (!this.healingDone[hrid][abilityHrid]) {
+            this.healingDone[hrid][abilityHrid] = 0;
         }
-        this.healingDone[unit.hrid][abilityHrid] += amount;
+        this.healingDone[hrid][abilityHrid] += amount;
     }
 
     addManapointsGained(unit, source, amount) {
-        if (!this.manapointsGained[unit.hrid]) {
-            this.manapointsGained[unit.hrid] = {};
+        const hrid = unitHrid(unit);
+        if (!this.manapointsGained[hrid]) {
+            this.manapointsGained[hrid] = {};
         }
-        if (!this.manapointsGained[unit.hrid][source]) {
-            this.manapointsGained[unit.hrid][source] = 0;
+        if (!this.manapointsGained[hrid][source]) {
+            this.manapointsGained[hrid][source] = 0;
         }
 
-        this.manapointsGained[unit.hrid][source] += amount;
+        this.manapointsGained[hrid][source] += amount;
     }
 
     setDropRateMultipliers(unit) {
-        if (!this.dropRateMultiplier[unit.hrid]) {
-            this.dropRateMultiplier[unit.hrid] = {};
+        const hrid = unitHrid(unit);
+        if (!this.dropRateMultiplier[hrid]) {
+            this.dropRateMultiplier[hrid] = {};
         }
-        this.dropRateMultiplier[unit.hrid] = 1 + unit.combatDetails.combatStats.combatDropRate;
+        this.dropRateMultiplier[hrid] = 1 + unit.combatDetails.combatStats.combatDropRate;
 
-        if (!this.rareFindMultiplier[unit.hrid]) {
-            this.rareFindMultiplier[unit.hrid] = {};
+        if (!this.rareFindMultiplier[hrid]) {
+            this.rareFindMultiplier[hrid] = {};
         }
-        this.rareFindMultiplier[unit.hrid] = 1 + unit.combatDetails.combatStats.combatRareFind;
+        this.rareFindMultiplier[hrid] = 1 + unit.combatDetails.combatStats.combatRareFind;
 
-        if (!this.combatDropQuantity[unit.hrid]) {
-            this.combatDropQuantity[unit.hrid] = {};
+        if (!this.combatDropQuantity[hrid]) {
+            this.combatDropQuantity[hrid] = {};
         }
-        this.combatDropQuantity[unit.hrid] = unit.combatDetails.combatStats.combatDropQuantity;
+        this.combatDropQuantity[hrid] = unit.combatDetails.combatStats.combatDropQuantity;
 
-        if (!this.debuffOnLevelGap[unit.hrid]) {
-            this.debuffOnLevelGap[unit.hrid] = {};
+        if (!this.debuffOnLevelGap[hrid]) {
+            this.debuffOnLevelGap[hrid] = {};
         }
-        this.debuffOnLevelGap[unit.hrid] = unit.debuffOnLevelGap;
+        this.debuffOnLevelGap[hrid] = unit.debuffOnLevelGap;
     }
 
     setManaUsed(unit) {
-        this.manaUsed[unit.hrid] = {};
+        const hrid = unitHrid(unit);
+        this.manaUsed[hrid] = {};
         for (let [key, value] of unit.abilityManaCosts.entries()) {
-            this.manaUsed[unit.hrid][key] = value;
+            this.manaUsed[hrid][key] = value;
         }
     }
 
     addHitpointsSpent(unit, source, amount) {
-        if (!this.hitpointsSpent[unit.hrid]) {
-            this.hitpointsSpent[unit.hrid] = {};
+        const hrid = unitHrid(unit);
+        if (!this.hitpointsSpent[hrid]) {
+            this.hitpointsSpent[hrid] = {};
         }
-        if (!this.hitpointsSpent[unit.hrid][source]) {
-            this.hitpointsSpent[unit.hrid][source] = 0;
+        if (!this.hitpointsSpent[hrid][source]) {
+            this.hitpointsSpent[hrid][source] = 0;
         }
 
-        this.hitpointsSpent[unit.hrid][source] += amount;
+        this.hitpointsSpent[hrid][source] += amount;
     }
 
     addRanOutOfManaCount(unit, isOutOfMana, time) {
-        if (isOutOfMana) this.playerRanOutOfMana[unit.hrid] = true;
+        const hrid = unitHrid(unit);
+        if (isOutOfMana) this.playerRanOutOfMana[hrid] = true;
 
-        if (!this.playerRanOutOfManaTime[unit.hrid]) {
-            this.playerRanOutOfManaTime[unit.hrid] = {isOutOfMana: false, startTimeForOutOfMana:0, totalTimeForOutOfMana:0};
+        if (!this.playerRanOutOfManaTime[hrid]) {
+            this.playerRanOutOfManaTime[hrid] = {isOutOfMana: false, startTimeForOutOfMana:0, totalTimeForOutOfMana:0};
         }
 
         if (isOutOfMana) {
-            if (!this.playerRanOutOfManaTime[unit.hrid].isOutOfMana) {
-                this.playerRanOutOfManaTime[unit.hrid].isOutOfMana = true;
-                this.playerRanOutOfManaTime[unit.hrid].startTimeForOutOfMana = time;
+            if (!this.playerRanOutOfManaTime[hrid].isOutOfMana) {
+                this.playerRanOutOfManaTime[hrid].isOutOfMana = true;
+                this.playerRanOutOfManaTime[hrid].startTimeForOutOfMana = time;
             }
         } else {
-            if (this.playerRanOutOfManaTime[unit.hrid].isOutOfMana) {
-                this.playerRanOutOfManaTime[unit.hrid].isOutOfMana = false;
-                this.playerRanOutOfManaTime[unit.hrid].totalTimeForOutOfMana += time - this.playerRanOutOfManaTime[unit.hrid].startTimeForOutOfMana;
+            if (this.playerRanOutOfManaTime[hrid].isOutOfMana) {
+                this.playerRanOutOfManaTime[hrid].isOutOfMana = false;
+                this.playerRanOutOfManaTime[hrid].totalTimeForOutOfMana += time - this.playerRanOutOfManaTime[hrid].startTimeForOutOfMana;
             }
         }
     }
@@ -306,6 +323,10 @@ class SimResult {
             playerData.maxMp.push(player.combatDetails.maxManapoints);
         });
     }
+}
+
+function unitHrid(unit) {
+    return unit?.uniqueHrid ?? unit?.hrid;
 }
 
 export default SimResult;

@@ -5,8 +5,11 @@ import { readFileSync } from "node:fs";
 import CombatSimulator from "../../packages/shykai-full-runtime/generated/src/combatsimulator/combatSimulator.js";
 import Monster from "../../packages/shykai-full-runtime/generated/src/combatsimulator/monster.js";
 import Ability from "../../packages/shykai-full-runtime/generated/src/combatsimulator/ability.js";
+import Player from "../../packages/shykai-full-runtime/generated/src/combatsimulator/player.js";
 import AutoAttackEvent from "../../packages/shykai-full-runtime/generated/src/combatsimulator/events/autoAttackEvent.js";
 import AbilityCastEndEvent from "../../packages/shykai-full-runtime/generated/src/combatsimulator/events/abilityCastEndEvent.js";
+import EnrageTickEvent from "../../packages/shykai-full-runtime/generated/src/combatsimulator/events/enrageTickEvent.js";
+import SimResult from "../../packages/shykai-full-runtime/generated/src/combatsimulator/simResult.js";
 import combatMonsterDetailMap from "../../packages/shykai-full-runtime/generated/src/combatsimulator/data/combatMonsterDetailMap.json.js";
 import {
   applyGuildTrialMonsterHpScaling,
@@ -49,7 +52,7 @@ function installBossDefinition(boss) {
     hrid: boss.hrid,
     name: boss.nameZh,
     experience: 0,
-    enrageTime: 24 * 60 * 60 * ONE_SECOND,
+    enrageTime: 10 * 60 * ONE_SECOND,
     abilities: boss.abilities.map((ability) => ({
       abilityHrid: ability.hrid,
       level: ability.level,
@@ -362,11 +365,26 @@ test("guild trial zone spawns two independently scaled badgers before advancing"
       monsterHpMultiplierForParticipants(21),
   );
   for (const monster of encounter) {
-    assert.equal(monster.hrid, "/guild_combat/badger");
+    assert.equal(monster.dataHrid, "/guild_combat/badger");
     assert.equal(monster.roomLevel, 100);
     assert.equal(monster.combatDetails.maxHitpoints, expectedHp);
     assert.equal(monster.combatDetails.currentHitpoints, expectedHp);
   }
+  assert.deepEqual(
+    encounter.map((monster) => monster.hrid),
+    ["/guild_combat/badger#1", "/guild_combat/badger#2"],
+  );
+  assert.deepEqual(
+    encounter.map((monster) => monster.displayName),
+    ["试炼獾 #1", "试炼獾 #2"],
+  );
+  const attackResult = new SimResult(zone, null, 1);
+  attackResult.addAttack(encounter[0], { hrid: "player" }, "autoAttack", 10);
+  attackResult.addAttack(encounter[1], { hrid: "player" }, "autoAttack", 20);
+  assert.deepEqual(Object.keys(attackResult.attacks), [
+    "/guild_combat/badger#1",
+    "/guild_combat/badger#2",
+  ]);
 
   // Wave clears only after every living enemy is dead.
   const players = [
@@ -393,3 +411,277 @@ test("guild trial zone spawns two independently scaled badgers before advancing"
   assert.equal(simulator.checkEncounterEnd(), true);
   assert.equal(simulator.enemies, null);
 });
+
+test("encounter reset clears every queued event and resets player encounter state", () => {
+  installBossDefinition(jellyfish);
+  const player = new Player();
+  player.hrid = "reset-player";
+  player.combatDetails.currentHitpoints = 1;
+  player.combatDetails.currentManapoints = 2;
+  player.isOutOfMana = true;
+  player.isStunned = true;
+  player.isBlinded = true;
+  player.isSilenced = true;
+  player.abilities = [new Ability("/abilities/berserk", 1)];
+  player.abilities[0].lastUsed = 123;
+  player.addPermanentBuff({
+    uniqueHrid: "/buff_uniques/test-permanent",
+    typeHrid: "/buff_types/damage",
+    ratioBoost: 0.05,
+    flatBoost: 0,
+  });
+  player.addBuff(
+    {
+      uniqueHrid: "/buff_uniques/test-temporary",
+      typeHrid: "/buff_types/damage",
+      ratioBoost: 0.25,
+      flatBoost: 0,
+      duration: 100 * 1e9,
+    },
+    0,
+  );
+
+  const zone = new GuildTrialZone("/guild_combat/jellyfish", 100, 10, 300, 1, 1);
+  const simulator = new CombatSimulator([player], zone, null, {
+    refillPlayersOnEnemyRespawn: true,
+  });
+  simulator.simulationTime = 5 * 1e9;
+  const oldEncounter = zone.getRandomEncounter();
+  simulator.enemies = oldEncounter;
+  const eventTypes = [
+    "autoAttack",
+    "abilityCastEndEvent",
+    "awaitCooldown",
+    "cooldownReady",
+    "damageOverTime",
+    "checkBuffExpiration",
+    "stunExpiration",
+    "blindExpiration",
+    "silenceExpiration",
+    "curseExpiration",
+    "weakenExpiration",
+    "furyExpiration",
+    "regenTick",
+    "enrageTick",
+    "consumableTick",
+    "enemyRespawn",
+    "playerRespawn",
+    "combatStartEvent",
+  ];
+  eventTypes.forEach((type, index) =>
+    simulator.eventQueue.addEvent({ type, time: simulator.simulationTime + index + 1 }),
+  );
+
+  simulator.refillPlayersForNextEncounter();
+
+  assert.equal(simulator.eventQueue.getNextEvent(), undefined);
+  assert.deepEqual(
+    [
+      player.combatDetails.currentHitpoints,
+      player.combatDetails.currentManapoints,
+      player.isOutOfMana,
+      player.isStunned,
+      player.isBlinded,
+      player.isSilenced,
+    ],
+    [player.combatDetails.maxHitpoints, player.combatDetails.maxManapoints, false, false, false, false],
+  );
+  assert.equal(player.abilities[0].lastUsed, Number.MIN_SAFE_INTEGER);
+  assert.deepEqual(Object.keys(player.combatBuffs), ["/buff_types/damage"]);
+
+  simulator.startNewEncounter();
+  const queued = simulator.eventQueue.minHeap.toArray();
+  const regen = queued.find((event) => event.type === "regenTick");
+  const enrage = queued.find((event) => event.type === "enrageTick");
+  assert.equal(regen.time, simulator.simulationTime + 10 * 1e9);
+  assert.equal(enrage.time, simulator.simulationTime + 60 * 1e9);
+  assert.equal(enrage.encounterTime, 60 * 1e9);
+  assert.equal(simulator.enrageBeginTime, simulator.simulationTime);
+});
+
+test("guild trial party wipe exits at the death event and freezes the living boss", async () => {
+  const player = makeMinimalCombatUnit({
+    hrid: "wipe-player",
+    isPlayer: true,
+    hitpoints: 1,
+    attackInterval: 1e18,
+    smashEvasionRating: 1,
+  });
+  const enemy = makeMinimalCombatUnit({
+    hrid: "wipe-boss#1",
+    isPlayer: false,
+    hitpoints: 100,
+    attackInterval: 1e9,
+    smashAccuracyRating: 1e9,
+    smashMaxDamage: 100,
+    enrageTime: 600 * 1e9,
+  });
+  const zone = {
+    hrid: "/guild_combat/test",
+    isGuildTrial: true,
+    isDungeon: false,
+    encountersKilled: 1,
+    nextLevel: 100,
+    maxLevel: 300,
+    spawnedLevels: [100],
+    getRandomEncounter: () => [enemy],
+    isComplete: () => false,
+    failWave() {},
+  };
+  const simulator = new CombatSimulator([player], zone, null, {
+    refillPlayersOnEnemyRespawn: true,
+  });
+  const originalRandom = Math.random;
+  Math.random = () => 0.5;
+  try {
+    const result = await simulator.simulate(3600 * 1e9);
+    assert.equal(result.stopReason, "party_wipe");
+    assert.equal(result.endedAt, 1e9);
+    assert.equal(result.simulatedTime, 1e9);
+    assert.deepEqual(result.livingEnemies, [
+      {
+        uniqueHrid: "wipe-boss#1",
+        dataHrid: "wipe-boss#1",
+        currentHitpoints: 100,
+        maxHitpoints: 100,
+      },
+    ]);
+    assert.equal(simulator.eventQueue.getNextEvent(), undefined);
+    assert.equal(result.hitpointsGained["wipe-player"], undefined);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("guild trial reports time cap and complete as explicit stop reasons", async () => {
+  const timeCapZone = {
+    hrid: "/guild_combat/test",
+    isGuildTrial: true,
+    isDungeon: false,
+    encountersKilled: 1,
+    nextLevel: 100,
+    maxLevel: 300,
+    spawnedLevels: [],
+    getRandomEncounter: () => [],
+    isComplete: () => false,
+    failWave() {},
+  };
+  const timeCapResult = await new CombatSimulator([], timeCapZone, null).simulate(5 * 1e9);
+  assert.equal(timeCapResult.stopReason, "time_cap");
+  assert.equal(timeCapResult.endedAt, 5 * 1e9);
+  assert.equal(timeCapResult.simulatedTime, 5 * 1e9);
+
+  const completeEnemy = makeMinimalCombatUnit({
+    hrid: "complete-boss#1",
+    isPlayer: false,
+    hitpoints: 0,
+    maxHitpoints: 100,
+    enrageTime: 600 * 1e9,
+  });
+  const completeZone = {
+    hrid: "/guild_combat/test",
+    isGuildTrial: true,
+    isDungeon: false,
+    encountersKilled: 2,
+    nextLevel: 310,
+    maxLevel: 300,
+    spawnedLevels: [100, 300],
+    isComplete: () => true,
+    failWave() {},
+  };
+  const completeSimulator = new CombatSimulator([], completeZone, null);
+  completeSimulator.simulationTime = 7 * 1e9;
+  completeSimulator.enemies = [completeEnemy];
+  completeSimulator.simResult = new SimResult(completeZone, null, 0);
+  assert.equal(completeSimulator.checkEncounterEnd(), true);
+  assert.equal(completeSimulator.simResult.stopReason, "complete");
+  assert.equal(completeSimulator.simResult.endedAt, 7 * 1e9);
+});
+
+test("enrage reaches 10 percent damage and accuracy per stack and caps at 10", () => {
+  const enemy = {
+    hrid: "enrage-boss#1",
+    enrageTime: 600 * 1e9,
+    combatDetails: { currentHitpoints: 100 },
+    addBuffs(buffs) {
+      this.buffs = buffs;
+    },
+  };
+  const simulator = new CombatSimulator([], null, null);
+  simulator.enemies = [enemy];
+  simulator.processEnrageTickEvent(new EnrageTickEvent(600 * 1e9, 600 * 1e9));
+  assert.equal(enemy.buffs.find((buff) => buff.typeHrid === "/buff_types/damage").ratioBoost, 0.1);
+  assert.equal(enemy.buffs.find((buff) => buff.typeHrid === "/buff_types/accuracy").ratioBoost, 0.1);
+
+  simulator.eventQueue.clear();
+  simulator.processEnrageTickEvent(new EnrageTickEvent(6000 * 1e9, 6000 * 1e9));
+  assert.equal(enemy.buffs.find((buff) => buff.typeHrid === "/buff_types/damage").ratioBoost, 1);
+  assert.equal(enemy.buffs.find((buff) => buff.typeHrid === "/buff_types/accuracy").ratioBoost, 1);
+  assert.equal(simulator.simResult.maxEnrageStack, 10);
+});
+
+function makeMinimalCombatUnit({
+  hrid,
+  isPlayer,
+  hitpoints,
+  maxHitpoints = hitpoints,
+  attackInterval,
+  smashAccuracyRating = 1,
+  smashMaxDamage = 1,
+  smashEvasionRating = 1,
+  enrageTime = 600 * 1e9,
+}) {
+  return {
+    hrid,
+    uniqueHrid: hrid,
+    dataHrid: hrid,
+    isPlayer,
+    enrageTime,
+    abilities: [],
+    food: [],
+    drinks: [],
+    abilityManaCosts: new Map(),
+    reset() {},
+    generatePermanentBuffs() {},
+    combatDetails: {
+      currentHitpoints: hitpoints,
+      maxHitpoints,
+      currentManapoints: 100,
+      maxManapoints: 100,
+      smashAccuracyRating,
+      smashMaxDamage,
+      smashEvasionRating,
+      totalArmor: 0,
+      combatStats: {
+        combatStyleHrid: "/combat_styles/smash",
+        damageType: "/damage_types/physical",
+        physicalAmplify: 0,
+        armorPenetration: 0,
+        physicalThorns: 0,
+        damageTaken: 0,
+        criticalRate: 0,
+        criticalDamage: 0,
+        lifeSteal: 0,
+        manaLeech: 0,
+        mayhem: 0,
+        curse: 0,
+        fury: 0,
+        weaken: 0,
+        pierce: 0,
+        attackInterval,
+        parry: 0,
+        retaliation: 0,
+      },
+    },
+    addHitpoints(amount) {
+      const added = Math.min(amount, this.combatDetails.maxHitpoints - this.combatDetails.currentHitpoints);
+      this.combatDetails.currentHitpoints += Math.max(0, added);
+      return Math.max(0, added);
+    },
+    addManapoints(amount) {
+      const added = Math.min(amount, this.combatDetails.maxManapoints - this.combatDetails.currentManapoints);
+      this.combatDetails.currentManapoints += Math.max(0, added);
+      return Math.max(0, added);
+    },
+  };
+}

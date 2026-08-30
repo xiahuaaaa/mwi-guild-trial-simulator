@@ -11,6 +11,10 @@ import {
   defaultAbility,
 } from "../packages/shykai-full-runtime/src/guild-trial-runner.mjs";
 import {
+  COMBAT_RULES_VERSION,
+  PERMANENT_BUFFS_ENABLED,
+} from "../packages/shykai-full-runtime/src/combat-rules-version.mjs";
+import {
   defaultLevelForMissingAbility,
   resolveLearnedAbilityLevel,
 } from "../packages/shykai-full-runtime/src/ability-level-defaults.mjs";
@@ -485,6 +489,11 @@ try {
         })),
         runs: fullRuns.map((run) => ({
           seed: run.seed,
+          stopReason: run.stopReason,
+          endedAt: run.endedAt,
+          simulatedTime: run.simulatedTime,
+          finalMonsterLevel: run.finalMonsterLevel,
+          livingEnemies: run.livingEnemies,
           wavesCleared: run.wavesCleared,
           finalMonsterHp: run.finalMonsterHp,
           finalMonsterMaxHp: run.finalMonsterMaxHp,
@@ -530,6 +539,8 @@ try {
     promotable: false,
     guildId,
     generatedAt: new Date().toISOString(),
+    combatRulesVersion: COMBAT_RULES_VERSION,
+    permanentBuffsEnabled: PERMANENT_BUFFS_ENABLED,
     engine: "shykai-full-event-runtime",
     rules: {
       durationSeconds: finalDurationSeconds,

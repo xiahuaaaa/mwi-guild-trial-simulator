@@ -539,6 +539,15 @@ class CombatUnit {
         this.combatDetails.currentManapoints = this.combatDetails.maxManapoints;
     }
 
+    resetForEncounter(currentTime = 0) {
+        this.clearCCs();
+        this.clearBuffs();
+        this.resetCooldowns(currentTime);
+        this.isOutOfMana = false;
+        this.combatDetails.currentHitpoints = this.combatDetails.maxHitpoints;
+        this.combatDetails.currentManapoints = this.combatDetails.maxManapoints;
+    }
+
     resetCooldowns(currentTime = 0) {
         this.food.filter((food) => food != null).forEach((food) => (food.lastUsed = Number.MIN_SAFE_INTEGER));
         this.drinks.filter((drink) => drink != null).forEach((drink) => (drink.lastUsed = Number.MIN_SAFE_INTEGER));

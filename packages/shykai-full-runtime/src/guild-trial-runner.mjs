@@ -4,8 +4,14 @@ import Player from "../generated/src/combatsimulator/player.js";
 import abilityDetailMap from "../generated/src/combatsimulator/data/abilityDetailMap.json.js";
 import combatMonsterDetailMap from "../generated/src/combatsimulator/data/combatMonsterDetailMap.json.js";
 import itemDetailMap from "../generated/src/combatsimulator/data/itemDetailMap.json.js";
+import {
+  COMBAT_RULES_VERSION,
+  PERMANENT_BUFFS_ENABLED,
+} from "./combat-rules-version.mjs";
 
 const ONE_SECOND = 1e9;
+
+export { COMBAT_RULES_VERSION, PERMANENT_BUFFS_ENABLED };
 
 /**
  * Confirmed encounter widths from the in-game guild-trial challenge panel.
@@ -176,6 +182,7 @@ export class GuildTrialZone {
       throw new RangeError("enemiesPerEncounter must be a safe integer >= 1");
     }
     this.hrid = bossHrid;
+    this.isGuildTrial = true;
     this.difficultyTier = 0;
     this.isDungeon = false;
     this.buffs = [];
@@ -208,9 +215,14 @@ export class GuildTrialZone {
     // Upstream CombatSimulator advances the floor only when every living
     // enemy reaches 0 HP, so multi-monster floors (e.g. two badgers or four
     // swarm insects) must all die before the next level spawns.
-    return this.enemyHrids.map((enemyHrid) => {
+    return this.enemyHrids.map((enemyHrid, index) => {
       const monster = new Monster(enemyHrid, 0, level);
-      return applyGuildTrialMonsterHpScaling(monster, this.participantCount);
+      applyGuildTrialMonsterHpScaling(monster, this.participantCount);
+      const displayName = combatMonsterDetailMap[enemyHrid]?.name ?? enemyHrid;
+      monster.uniqueHrid = `${enemyHrid}#${index + 1}`;
+      monster.hrid = monster.uniqueHrid;
+      monster.displayName = `${displayName} #${index + 1}`;
+      return monster;
     });
   }
 
@@ -292,7 +304,7 @@ export function applyGuildTrialMonsterHpScaling(monster, participantCount) {
   const updateCombatDetails = monster.updateCombatDetails.bind(monster);
   monster.updateCombatDetails = () => {
     updateCombatDetails();
-    const pools = level100PoolsFromDefinition(monster.hrid);
+    const pools = level100PoolsFromDefinition(monster.dataHrid ?? monster.hrid);
     const level = Number(monster.roomLevel);
     const unscaledHp = guildTrialMonsterPoolAtLevel(pools.maxHitpoints, level);
     const unscaledMp = guildTrialMonsterPoolAtLevel(pools.maxManapoints, level);
@@ -411,7 +423,7 @@ function installMonsterDefinition(monster) {
     hrid: monster.hrid,
     name: monster.nameZh ?? monster.name ?? monster.hrid,
     experience: 0,
-    enrageTime: 24 * 60 * 60 * ONE_SECOND,
+    enrageTime: 10 * 60 * ONE_SECOND,
     abilities: monster.abilities.map((ability) => ({
       abilityHrid: ability.hrid ?? ability.abilityHrid,
       level: ability.level,
@@ -529,6 +541,11 @@ function summarizeRun({
   return {
     seed,
     durationSeconds,
+    combatRulesVersion: COMBAT_RULES_VERSION,
+    permanentBuffsEnabled: PERMANENT_BUFFS_ENABLED,
+    stopReason: simResult.stopReason ?? simulator.stopReason,
+    endedAt: simResult.endedAt ?? simulator.endedAt,
+    simulatedTime: simResult.simulatedTime,
     wavesCleared: simResult.encounters,
     enemiesPerEncounter: zone.enemiesPerEncounter,
     finalMonsterLevel:
@@ -544,6 +561,13 @@ function summarizeRun({
       0,
     ),
     livingEnemyCount: livingEnemies.length,
+    livingEnemies: livingEnemies.map((enemy) => ({
+      uniqueHrid: enemy.uniqueHrid ?? enemy.hrid,
+      dataHrid: enemy.dataHrid ?? enemy.hrid,
+      displayName: enemy.displayName ?? enemy.hrid,
+      currentHitpoints: enemy.combatDetails.currentHitpoints,
+      maxHitpoints: enemy.combatDetails.maxHitpoints,
+    })),
     participantCount: zone.participantCount,
     monsterHpMultiplier: zone.monsterHpMultiplier,
     monsterAttackSpeedBonus: zone.monsterAttackSpeedBonus,

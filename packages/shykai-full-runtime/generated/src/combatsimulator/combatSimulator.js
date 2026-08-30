@@ -47,6 +47,8 @@ class CombatSimulator extends EventTarget {
         this.maxParryAttempts = options.maxParryAttempts ?? 1;
         this.refillPlayersOnEnemyRespawn =
             options.refillPlayersOnEnemyRespawn ?? false;
+        this.stopReason = null;
+        this.endedAt = null;
 
         this.wipeLogs = {
             buffer: new Array(200),
@@ -184,10 +186,11 @@ class CombatSimulator extends EventTarget {
         let combatStartEvent = new CombatStartEvent(0);
         this.eventQueue.addEvent(combatStartEvent);
 
-        while (this.simulationTime < simulationTimeLimit) {
+        while (!this.stopReason && this.simulationTime < simulationTimeLimit) {
             let nextEvent = this.eventQueue.getNextEvent();
             if (!nextEvent || nextEvent.time > simulationTimeLimit) {
                 this.simulationTime = simulationTimeLimit;
+                this.setStopReason("time_cap");
                 break;
             }
             await this.processEvent(nextEvent);
@@ -213,6 +216,11 @@ class CombatSimulator extends EventTarget {
             }
         }
 
+        if (!this.stopReason) {
+            this.simulationTime = simulationTimeLimit;
+            this.setStopReason("time_cap");
+        }
+
         // for (let i = 0; i < this.simResult.timeSpentAlive.length; i++) {
         //     if (this.simResult.timeSpentAlive[i].alive == true) {
         //         this.simResult.updateTimeSpentAlive(this.simResult.timeSpentAlive[i].name, false, simulationTimeLimit);
@@ -221,8 +229,6 @@ class CombatSimulator extends EventTarget {
 
         this.simResult.isDungeon = this.zone?.isDungeon ?? false;
         if (this.zone && this.simResult.isDungeon) {
-            console.log("Timeout now at wave #" + (this.zone.encountersKilled - 1));
-
             this.simResult.dungeonsCompleted = this.zone.dungeonsCompleted;
             this.simResult.dungeonsFailed = this.zone.dungeonsFailed;
             if (this.simResult.dungeonsCompleted < 1) {
@@ -273,9 +279,35 @@ class CombatSimulator extends EventTarget {
         this.simulationTime = 0;
         this.eventQueue.clear();
         this.simResult = new SimResult(this.zone, this.labyrinth, this.players.length);
+        this.stopReason = null;
+        this.endedAt = null;
+    }
+
+    setStopReason(reason) {
+        if (this.stopReason) return;
+        this.stopReason = reason;
+        this.endedAt = this.simulationTime;
+        this.simResult.stopReason = reason;
+        this.simResult.endedAt = this.simulationTime;
+        this.simResult.simulatedTime = this.simulationTime;
+        this.simResult.finalMonsterLevel =
+            this.enemies?.find((enemy) => enemy.combatDetails.currentHitpoints > 0)?.roomLevel ??
+            this.zone?.spawnedLevels?.at(-1) ??
+            this.zone?.nextLevel ??
+            null;
+        this.simResult.livingEnemies = (this.enemies ?? [])
+            .filter((enemy) => enemy.combatDetails.currentHitpoints > 0)
+            .map((enemy) => ({
+                uniqueHrid: enemy.uniqueHrid ?? enemy.hrid,
+                dataHrid: enemy.dataHrid ?? enemy.hrid,
+                currentHitpoints: enemy.combatDetails.currentHitpoints,
+                maxHitpoints: enemy.combatDetails.maxHitpoints,
+            }));
+        this.eventQueue.clear();
     }
 
     async processEvent(event) {
+        if (this.stopReason) return;
         this.simulationTime = event.time;
 
         // console.log(this.simulationTime / 1e9, event.type, event);
@@ -338,7 +370,9 @@ class CombatSimulator extends EventTarget {
                 break;
         }
 
-        this.checkTriggers();
+        if (!this.stopReason) {
+            this.checkTriggers();
+        }
     }
 
     processCombatStartEvent(event) {
@@ -353,9 +387,6 @@ class CombatSimulator extends EventTarget {
                 this.players[i].reset(this.simulationTime);
             }
         }
-        let regenTickEvent = new RegenTickEvent(this.simulationTime + REGEN_TICK_INTERVAL);
-        this.eventQueue.addEvent(regenTickEvent);
-
         this.startNewEncounter();
     }
 
@@ -366,6 +397,7 @@ class CombatSimulator extends EventTarget {
         respawningPlayer.combatDetails.currentManapoints = respawningPlayer.combatDetails.maxManapoints;
         respawningPlayer.clearBuffs();
         respawningPlayer.clearCCs();
+        respawningPlayer.isOutOfMana = false;
         if (this.allPlayersDead) {
             this.allPlayersDead = false;
             this.startAttacks();
@@ -376,18 +408,23 @@ class CombatSimulator extends EventTarget {
 
     processEnemyRespawnEvent(event) {
         if (this.refillPlayersOnEnemyRespawn) {
-            this.refillPlayersForNextEncounter();
+            this.resetEncounter();
         }
         this.startNewEncounter();
     }
 
-    refillPlayersForNextEncounter() {
-        this.eventQueue.clearEventsOfType(PlayerRespawnEvent.type);
+    resetEncounter() {
+        this.eventQueue.clear();
         for (const player of this.players) {
-            player.combatDetails.currentHitpoints =
-                player.combatDetails.maxHitpoints;
-            player.combatDetails.currentManapoints =
-                player.combatDetails.maxManapoints;
+            if (typeof player.resetForEncounter === "function") {
+                player.resetForEncounter(this.simulationTime);
+            } else {
+                player.combatDetails.currentHitpoints =
+                    player.combatDetails.maxHitpoints;
+                player.combatDetails.currentManapoints =
+                    player.combatDetails.maxManapoints;
+                player.isOutOfMana = false;
+            }
             this.simResult.addRanOutOfManaCount(
                 player,
                 false,
@@ -395,6 +432,10 @@ class CombatSimulator extends EventTarget {
             );
         }
         this.allPlayersDead = false;
+    }
+
+    refillPlayersForNextEncounter() {
+        this.resetEncounter();
     }
 
     startNewEncounter() {
@@ -438,6 +479,9 @@ class CombatSimulator extends EventTarget {
         this.eventQueue.clearEventsOfType(EnrageTickEvent.type);
         let enrageTickEvent = new EnrageTickEvent(this.simulationTime + ENRAGE_TICK_INTERVAL, ENRAGE_TICK_INTERVAL);
         this.eventQueue.addEvent(enrageTickEvent);
+        this.eventQueue.clearEventsOfType(RegenTickEvent.type);
+        let regenTickEvent = new RegenTickEvent(this.simulationTime + REGEN_TICK_INTERVAL);
+        this.eventQueue.addEvent(regenTickEvent);
         this.enrageBeginTime = this.simulationTime;
 
         this.eventQueue.clearEventsOfType(AbilityCastEndEvent.type);
@@ -695,6 +739,8 @@ class CombatSimulator extends EventTarget {
     }
 
     checkEncounterEnd() {
+        if (this.stopReason) return true;
+
         if (this.enemies) {
             let deadEnemies = this.enemies.filter((enemy) => enemy.combatDetails.currentHitpoints <= 0 && enemy.experienceRate == 0);
             if (deadEnemies.length > 0) {
@@ -707,6 +753,16 @@ class CombatSimulator extends EventTarget {
                     // console.log(enemy.hrid, "alive duration", aliveDuration, "exp rate", enemy.experienceRate);
                 })
             }
+        }
+
+        const isGuildTrial = this.zone?.isGuildTrial === true;
+        const partyWipe =
+            isGuildTrial &&
+            this.players.length > 0 &&
+            !this.players.some((player) => player.combatDetails.currentHitpoints > 0);
+        if (partyWipe) {
+            this.setStopReason("party_wipe");
+            return true;
         }
 
         let encounterEnded = false;
@@ -742,7 +798,7 @@ class CombatSimulator extends EventTarget {
             this.simResult.addEncounterEnd();
             this.simResult.lastEncounterFinishTime = this.simulationTime;
             if (trialComplete) {
-                this.eventQueue.clear();
+                this.setStopReason("complete");
             }
             // console.log("All enemies died");
 
@@ -774,21 +830,12 @@ class CombatSimulator extends EventTarget {
                     this.wipeLogs.count = 0;
 
                     // 地下城团灭：只清除战斗相关事件，保留buff过期检查和CD事件
-                    this.eventQueue.clearEventsOfType(AutoAttackEvent.type);
-                    this.eventQueue.clearEventsOfType(AbilityCastEndEvent.type);
-                    this.eventQueue.clearEventsOfType(DamageOverTimeEvent.type);
-                    this.eventQueue.clearEventsOfType(ConsumableTickEvent.type);
-                    this.eventQueue.clearEventsOfType(RegenTickEvent.type);
-                    this.eventQueue.clearEventsOfType(EnrageTickEvent.type);
-                    this.eventQueue.clearEventsOfType(StunExpirationEvent.type);
-                    this.eventQueue.clearEventsOfType(BlindExpirationEvent.type);
-                    this.eventQueue.clearEventsOfType(SilenceExpirationEvent.type);
-                    this.eventQueue.clearEventsOfType(AwaitCooldownEvent.type);
+                    this.eventQueue.clear();
                     this.enemies = null;
 
                     let combatStartEvent = new CombatStartEvent(this.simulationTime + RESTART_INTERVAL);
                     this.eventQueue.addEvent(combatStartEvent);
-                } else {
+                } else if (!isGuildTrial) {
                     this.eventQueue.clearEventsOfType(AutoAttackEvent.type);
                     this.eventQueue.clearEventsOfType(AbilityCastEndEvent.type);
                 }
@@ -1042,8 +1089,6 @@ class CombatSimulator extends EventTarget {
                 return;
             }
 
-            console.log(enemy.hrid, nowStack, " stack Enrage at ", (event.encounterTime / ONE_SECOND));
-
             const enrageDamageBuff = {
                     "uniqueHrid": "/buff_uniques/enrage_damage",
                     "typeHrid": "/buff_types/damage",
@@ -1064,7 +1109,7 @@ class CombatSimulator extends EventTarget {
                     "startTime": "0001-01-01T00:00:00Z",
                     "duration": ENRAGE_TICK_INTERVAL
             };
-            enemy.addBuffs([enrageDamageBuff, enrageAccuracyBuff]);
+            enemy.addBuffs([enrageDamageBuff, enrageAccuracyBuff], this.simulationTime);
             // enemy.addBuff(enrageDamageBuff);
             // enemy.addBuff(enrageAccuracyBuff);
             
