@@ -1,9 +1,9 @@
 /**
- * Versioned contract for combat lab artifacts. B is the current trial
- * respawn policy: players keep the 150s automatic respawn, but a party wipe
- * is terminal when every player is dead at the same simulation timestamp.
+ * Versioned contract for combat lab artifacts. Guild-trial automatic respawn
+ * is disabled, while player revive abilities remain enabled. A party wipe is
+ * terminal only when every player is dead and has not been revived.
  */
-export const COMBAT_RULES_VERSION = "guild-trial-rules-2026-08-30.1";
+export const COMBAT_RULES_VERSION = "guild-trial-rules-2026-08-30.2";
 export const PERMANENT_BUFFS_ENABLED = false;
 
 export function assertCombatRulesVersion(lab, source = "combat lab JSON") {

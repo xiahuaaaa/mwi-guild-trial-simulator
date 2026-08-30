@@ -1,10 +1,10 @@
 # 公会战斗模拟：对照 will-shy 后的落地方案
 
 更新时间：2026-08-30（Asia/Shanghai）
-状态：**方案已修订，尚未改代码。** 对照结论可实施前，须先满足本文契约与验收门槛。
+状态：**方案已拍板，战斗引擎切片已合入；个人复活已改为 A（自动复活关闭、技能复活保留）。**
 权威：对照结论、实现边界、部署顺序以本文为准；实现后再回写 [`CLAUDE_CODE_HANDOFF.md`](../CLAUDE_CODE_HANDOFF.md) §4.3 / §6.3 / §11.1。
 
-本文吸收内部 review（Request changes）。未关闭项只有 **个人自动复活**（§1.3），实施前必须再拍板，本文不擅自二选一。
+本文吸收内部 review（Request changes）。本切片仅落实战斗模拟契约；API、插件、运行副本和覆盖率门禁仍按后续门槛执行。
 
 ---
 
@@ -83,12 +83,12 @@ date: 2026-08-28T08:07:39Z
 | 狂暴 | `enrageTime` 写成 24 小时 | 600 秒一层，最多 10 层，每层 +10% 伤害 **和命中** | **采用对方**；换层必须重置狂暴时钟 |
 | 全灭 | 非地下城只清部分攻击事件，`simulate` 仍跑到时间上限；玩家 150 秒复活 | Trial Mode：团灭/超时停场 | **团灭为显式终止态**（§2.2） |
 | 换层 | `refillPlayersOnEnemyRespawn` 只补 HP/MP；DOT 用 `sourceRef`，来源死亡后仍 tick | 每层独立 battle，队列不跨层 | **显式 encounter reset**（§2.1），不是「约等于新建 DTO」 |
-| 个人复活 | 非地下城 `PlayerRespawnEvent` + 150s | group battle **no respawns** | **实施前待确认**（§1.3） |
+| 个人复活 | 非地下城 `PlayerRespawnEvent` + 150s | group battle **no respawns** | **采用 A：关闭 150s 自动复活，保留玩家复活技能**；仅与 will-shy 的“无自动复活”对齐，不宣称完整 no-respawns 一致 |
 | 房屋/成就/神龛 | `createPlayer` 传空 | 组队战 `start_battle` 也不套神龛 | **试炼吃这三项**；必须走 API 灰度，覆盖率未达标前周五组合 **不得** 启用永久加成 |
 | 多只同 hrid Boss | `SimResult` 按 hrid 合并 | uniqueHrid | **拆开**；展示「中文名 #1 / #2」 |
 | 变色龙防御伤害 | fixture 有字段未写入 | 游戏表驱动 | **变色龙不吃，不补映射** |
 
-### 1.3 用户已拍板（2026-08-30）与未拍板
+### 1.3 用户已拍板（2026-08-30）
 
 已拍板：
 
@@ -99,13 +99,14 @@ date: 2026-08-28T08:07:39Z
 5. 房屋/成就/神龛试炼生效；插件采集；模拟要算——但 **启用时机** 受 §3.4 覆盖率门禁约束。
 6. 变色龙不补 `defensiveDamage`。
 7. 多只同名 Boss 统计拆开。
+8. 个人复活采用 A：关闭 150 秒自动 `PlayerRespawnEvent`；保留玩家复活技能。
 
-未拍板（实施前必须确认，二选一）：
+个人复活落地口径：
 
-- **A. 完全 no auto-respawn**：个人死亡不排队 150 秒复活；存活队友继续打；全灭立即 `party_wipe`。这才与 will-shy group battle 一致。
-- **B. 混合规则**：个人仍 150 秒自动复活 + 复活技能；**仅当同一时刻没有存活玩家** 才 `party_wipe`。若选 B，文档与交接 **不得** 宣称与 will-shy 完全一致。
-
-在未确认前不得开始实现复活相关分支。引擎团灭终止态、encounter reset、狂暴、uniqueHrid、API 字段仍可按本文其余章节设计。
+- 不排队 150 秒 `PlayerRespawnEvent`；死者保持死亡，存活队友继续战斗。
+- 玩家复活技能仍可救起死者，救起后继续战斗。
+- 全员死亡且无人被技能救起时才 `party_wipe`，并在团灭时刻退出。
+- 这只对齐 will-shy 的“无自动复活”；由于保留技能复活，不宣称与 will-shy 完整 no-respawns 一致。
 
 ---
 
@@ -286,7 +287,7 @@ Feature flag：`permanentBuffsEnabled` 写入 lab JSON，与 `combatRulesVersion
 建议常量（实现时可微调，但旧值必须失效）：
 
 ```text
-combatRulesVersion: "guild-trial-rules-2026-08-30.1"
+combatRulesVersion: "guild-trial-rules-2026-08-30.2"
 ```
 
 [`run-and-publish-combat-assignment.mjs --skip-sim`](../scripts/run-and-publish-combat-assignment.mjs) 与所有 `scripts/ab-*.mjs`：版本不匹配或缺字段 → **拒绝退出非 0**。实现本方案后，**必须重新跑组合实验室**；不得把现有 `.local/*lab*.json` 拿来 `--skip-sim`。
@@ -361,13 +362,13 @@ API / 插件：
 - Skill Lab 页面、施放次数报表。
 - 在 API/运行副本未接受新字段前发布采集插件。
 - 用旧 `.local` lab JSON `--skip-sim` 或当本周正式方案。
-- 未拍板个人复活前实现并宣称与 will-shy 完全一致。
+- 将“无自动复活”扩大宣称为与 will-shy 完整 no-respawns 一致；本实现保留玩家复活技能。
 
 ---
 
 ## 9. 实施顺序（契约满足后才写代码）
 
-1. 拍板 §1.3 个人复活 A/B。
+1. ~~拍板 §1.3 个人复活 A/B。~~ 已完成：采用 A（自动复活关闭、技能复活保留）。
 2. 引擎：encounter reset、`party_wipe` 真退出、狂暴、uniqueHrid；`combatRulesVersion`；永久加成默认关。
 3. API 校验 + merge；测试；同步运行副本并往返验证。
 4. 发布 TMD/WI 采集；查覆盖率。

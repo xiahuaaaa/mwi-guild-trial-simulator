@@ -808,7 +808,7 @@ class CombatSimulator extends EventTarget {
 
         this.players.forEach(player => {
             if ((player.combatDetails.currentHitpoints <= 0) && !this.eventQueue.containsEventOfTypeAndHrid(PlayerRespawnEvent.type, player.hrid)) {
-                if (this.zone && !this.zone.isDungeon) {
+                if (this.zone && !this.zone.isDungeon && !isGuildTrial) {
                     let playerRespawnEvent = new PlayerRespawnEvent(this.simulationTime + PLAYER_RESPAWN_INTERVAL, player.hrid);
                     this.eventQueue.addEvent(playerRespawnEvent);
                 }

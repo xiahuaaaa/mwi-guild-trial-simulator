@@ -7,6 +7,7 @@ import Monster from "../../packages/shykai-full-runtime/generated/src/combatsimu
 import Ability from "../../packages/shykai-full-runtime/generated/src/combatsimulator/ability.js";
 import Player from "../../packages/shykai-full-runtime/generated/src/combatsimulator/player.js";
 import AutoAttackEvent from "../../packages/shykai-full-runtime/generated/src/combatsimulator/events/autoAttackEvent.js";
+import PlayerRespawnEvent from "../../packages/shykai-full-runtime/generated/src/combatsimulator/events/playerRespawnEvent.js";
 import AbilityCastEndEvent from "../../packages/shykai-full-runtime/generated/src/combatsimulator/events/abilityCastEndEvent.js";
 import EnrageTickEvent from "../../packages/shykai-full-runtime/generated/src/combatsimulator/events/enrageTickEvent.js";
 import SimResult from "../../packages/shykai-full-runtime/generated/src/combatsimulator/simResult.js";
@@ -553,6 +554,124 @@ test("guild trial party wipe exits at the death event and freezes the living bos
   }
 });
 
+test("guild trial keeps dead players dead without automatic respawn while teammates continue", async () => {
+  const deadPlayer = makeMinimalCombatUnit({
+    hrid: "dead-player",
+    isPlayer: true,
+    hitpoints: 0,
+    maxHitpoints: 100,
+    attackInterval: 1e9,
+  });
+  const livingPlayer = makeMinimalCombatUnit({
+    hrid: "living-player",
+    isPlayer: true,
+    hitpoints: 100,
+    attackInterval: 1e9,
+    smashMaxDamage: 1,
+  });
+  const enemy = makeMinimalCombatUnit({
+    hrid: "no-respawn-boss#1",
+    isPlayer: false,
+    hitpoints: 1_000_000,
+    attackInterval: 1e18,
+    smashAccuracyRating: 1,
+    smashMaxDamage: 0,
+  });
+  const zone = {
+    hrid: "/guild_combat/test",
+    isGuildTrial: true,
+    isDungeon: false,
+    encountersKilled: 1,
+    nextLevel: 100,
+    maxLevel: 300,
+    spawnedLevels: [100],
+    getRandomEncounter: () => [enemy],
+    isComplete: () => false,
+    failWave() {},
+  };
+  const simulator = new CombatSimulator([deadPlayer, livingPlayer], zone, null);
+  simulator.simulationTime = 1e9;
+  simulator.enemies = [enemy];
+  simulator.checkEncounterEnd();
+  assert.equal(
+    simulator.eventQueue
+      .minHeap
+      .toArray()
+      .some((event) => event.type === PlayerRespawnEvent.type && event.hrid === deadPlayer.hrid),
+    false,
+  );
+
+  const originalRandom = Math.random;
+  Math.random = () => 0.5;
+  try {
+    const result = await simulator.simulate(151 * 1e9);
+    assert.equal(deadPlayer.combatDetails.currentHitpoints, 0);
+    assert.equal(result.hitpointsGained[deadPlayer.hrid], undefined);
+    assert.equal(result.attacks[deadPlayer.hrid], undefined);
+    assert.ok(result.attacks[livingPlayer.hrid]);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("guild trial player revive ability rescues a dead teammate who resumes attacking", () => {
+  const reviver = makeMinimalCombatUnit({
+    hrid: "reviver",
+    isPlayer: true,
+    hitpoints: 100,
+    attackInterval: 1e18,
+  });
+  reviver.combatDetails.magicMaxDamage = 1_000;
+  reviver.combatDetails.currentManapoints = 1_000;
+  reviver.combatDetails.maxManapoints = 1_000;
+  const deadPlayer = makeMinimalCombatUnit({
+    hrid: "revived-player",
+    isPlayer: true,
+    hitpoints: 0,
+    maxHitpoints: 100,
+    attackInterval: 1e9,
+  });
+  const enemy = makeMinimalCombatUnit({
+    hrid: "revive-boss#1",
+    isPlayer: false,
+    hitpoints: 1_000_000,
+    attackInterval: 1e18,
+    smashAccuracyRating: 1,
+    smashMaxDamage: 0,
+  });
+  const zone = {
+    hrid: "/guild_combat/test",
+    isGuildTrial: true,
+    isDungeon: false,
+    encountersKilled: 1,
+    nextLevel: 100,
+    maxLevel: 300,
+    spawnedLevels: [100],
+    getRandomEncounter: () => [enemy],
+    isComplete: () => false,
+    failWave() {},
+  };
+  const reviveAbility = new Ability("/abilities/revive", 1);
+  reviver.abilities = [reviveAbility];
+  const simulator = new CombatSimulator([reviver, deadPlayer], zone, null);
+  simulator.simulationTime = 1e9;
+  simulator.enemies = [enemy];
+
+  const originalRandom = Math.random;
+  Math.random = () => 0.5;
+  try {
+    assert.equal(simulator.tryUseAbility(reviver, reviveAbility), true);
+    assert.ok(deadPlayer.combatDetails.currentHitpoints > 0);
+    assert.ok(
+      simulator.eventQueue.getMatching(
+        (event) => event.type === AutoAttackEvent.type && event.source === deadPlayer,
+      ),
+    );
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
 test("guild trial reports time cap and complete as explicit stop reasons", async () => {
   const timeCapZone = {
     hrid: "/guild_combat/test",
@@ -648,6 +767,8 @@ function makeMinimalCombatUnit({
       maxHitpoints,
       currentManapoints: 100,
       maxManapoints: 100,
+      magicMaxDamage: 0,
+      healingAmplify: 0,
       smashAccuracyRating,
       smashMaxDamage,
       smashEvasionRating,
@@ -658,6 +779,11 @@ function makeMinimalCombatUnit({
         physicalAmplify: 0,
         armorPenetration: 0,
         physicalThorns: 0,
+        healingAmplify: 0,
+        hpRegenPer10: 0,
+        mpRegenPer10: 0,
+        abilityHaste: 0,
+        castSpeed: 0,
         damageTaken: 0,
         criticalRate: 0,
         criticalDamage: 0,
@@ -683,5 +809,7 @@ function makeMinimalCombatUnit({
       this.combatDetails.currentManapoints += Math.max(0, added);
       return Math.max(0, added);
     },
+    removeExpiredBuffs() {},
+    clearCCs() {},
   };
 }
