@@ -129,6 +129,21 @@ export function defaultSimulatorProjectRoot(): string {
   );
 }
 
+export function resolveLifeReportDirectory(
+  apiSlugInput?: string,
+  projectRoot = defaultSimulatorProjectRoot(),
+): string {
+  const apiSlug = normalizeApiSlug(apiSlugInput);
+  const suffix = apiSlug === "TMD" ? "" : `_${apiSlug}`;
+  const fromEnv =
+    process.env[`MWI_LIFE_REPORT_DIR${suffix}`]?.trim() ??
+    (apiSlug === "TMD" ? process.env.MWI_LIFE_REPORT_DIR?.trim() : undefined);
+  if (fromEnv) return fromEnv;
+  const simulatorRoot = process.env.MWI_GUILD_SIMULATOR_ROOT?.trim();
+  return resolveGuildReportPaths(apiSlug, simulatorRoot || projectRoot)
+    .lifeReportArtifactsDir;
+}
+
 export function resolveGuildReportPaths(
   apiSlugInput?: string,
   projectRoot = defaultSimulatorProjectRoot(),

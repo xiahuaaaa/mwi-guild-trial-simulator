@@ -15,6 +15,7 @@ import {
   parseExcludedMemberIds,
   resolveExcludeMembersEnv,
   resolveGuildReportPaths,
+  resolveLifeReportDirectory,
 } from "../../apps/qq-bot/src/guild-report-paths.ts";
 
 const projectRoot = path.resolve(
@@ -113,6 +114,44 @@ test("local artifacts, lab JSON, lock, backup, and cache paths split by apiSlug"
     tmd.professionReportCacheDir,
     "/var/lib/mwi-guild-server/qq-profession-report-cache",
   );
+});
+
+test("resolveLifeReportDirectory does not route WI through TMD env override", () => {
+  const prevTmd = process.env.MWI_LIFE_REPORT_DIR;
+  const prevWi = process.env.MWI_LIFE_REPORT_DIR_WI;
+  process.env.MWI_LIFE_REPORT_DIR = "/srv/tmd-life-report";
+  process.env.MWI_LIFE_REPORT_DIR_WI = "/srv/wi-life-report";
+  try {
+    assert.equal(resolveLifeReportDirectory("TMD", projectRoot), "/srv/tmd-life-report");
+    assert.equal(resolveLifeReportDirectory("WI", projectRoot), "/srv/wi-life-report");
+  } finally {
+    if (prevTmd === undefined) delete process.env.MWI_LIFE_REPORT_DIR;
+    else process.env.MWI_LIFE_REPORT_DIR = prevTmd;
+    if (prevWi === undefined) delete process.env.MWI_LIFE_REPORT_DIR_WI;
+    else process.env.MWI_LIFE_REPORT_DIR_WI = prevWi;
+  }
+});
+
+test("resolveLifeReportDirectory falls back to slug artifact dirs when env unset", () => {
+  const prevTmd = process.env.MWI_LIFE_REPORT_DIR;
+  const prevWi = process.env.MWI_LIFE_REPORT_DIR_WI;
+  delete process.env.MWI_LIFE_REPORT_DIR;
+  delete process.env.MWI_LIFE_REPORT_DIR_WI;
+  try {
+    assert.equal(
+      resolveLifeReportDirectory("WI", projectRoot),
+      path.join(projectRoot, "artifacts/WI/life-report"),
+    );
+    assert.equal(
+      resolveLifeReportDirectory("TMD", projectRoot),
+      path.join(projectRoot, "artifacts/life-report"),
+    );
+  } finally {
+    if (prevTmd === undefined) delete process.env.MWI_LIFE_REPORT_DIR;
+    else process.env.MWI_LIFE_REPORT_DIR = prevTmd;
+    if (prevWi === undefined) delete process.env.MWI_LIFE_REPORT_DIR_WI;
+    else process.env.MWI_LIFE_REPORT_DIR_WI = prevWi;
+  }
 });
 
 test("exclude-member defaults follow apiSlug when env is unset", () => {

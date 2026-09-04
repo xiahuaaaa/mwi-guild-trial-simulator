@@ -68,7 +68,7 @@ import {
 import { computeWorkforce, LIFE_SKILLS } from "./life-workforce.ts";
 import { formatBeijingTimestamp } from "./beijing-time.ts";
 import { guildMessageLabel } from "./guild-group-routing.ts";
-import { resolveGuildReportPaths } from "./guild-report-paths.ts";
+import { resolveGuildReportPaths, resolveLifeReportDirectory } from "./guild-report-paths.ts";
 import {
   greasyForkScriptPageUrl,
   resolveWiGreasyForkScriptId,
@@ -728,7 +728,9 @@ export class GuildApiCommandService implements CommandServicePort {
       );
 
       return {
-        text: formatLifeAssignmentReportSummary(run),
+        text: formatLifeAssignmentReportSummary(run, {
+          apiSlug: this.#config.guildId,
+        }),
         images: [{ base64: png.toString("base64"), alt: "本周生活分工" }],
       };
     });
@@ -1066,7 +1068,8 @@ export class GuildApiCommandService implements CommandServicePort {
         }
       }
 
-      const lifeImage = await this.#readLifeAssignmentImage().catch(() => null);
+      const lifeGeneratedAt = await this.#readLifeReportGeneratedAt();
+      const lifeImage = await this.#readLifeAssignmentImage(lifeGeneratedAt).catch(() => null);
       if (lifeImage) {
         images = [lifeImage, ...(images ?? [])];
       }
@@ -1087,8 +1090,10 @@ export class GuildApiCommandService implements CommandServicePort {
     });
   }
 
-  async #readLifeAssignmentImage(): Promise<{ base64: string; alt: string } | null> {
-    const png = await this.#readLifeAssignmentPng().catch(() => null);
+  async #readLifeAssignmentImage(
+    expectedGeneratedAt?: string,
+  ): Promise<{ base64: string; alt: string } | null> {
+    const png = await this.#readLifeAssignmentPng(expectedGeneratedAt).catch(() => null);
     if (!png) return null;
     return {
       base64: png.toString("base64"),
@@ -1831,12 +1836,6 @@ export function missingTestReportAssetsMessage(
     "git pull 后该目录含 4 张 PNG + manifest.json，" +
     "或把 MWI_TEST_REPORT_DIR 指到 artifacts\\test-report 后重启 QQ Bot。"
   );
-}
-
-function resolveLifeReportDirectory(guildId?: string): string {
-  const fromEnv = process.env.MWI_LIFE_REPORT_DIR?.trim();
-  if (fromEnv) return fromEnv;
-  return resolveGuildReportPaths(guildId).lifeReportArtifactsDir;
 }
 
 export { formatGuildProfessionReport } from "./guild-profession-report.ts";
