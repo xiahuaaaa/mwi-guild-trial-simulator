@@ -5,6 +5,7 @@ import {
   generateLifeAssignmentRun,
   parseLifePinnedMembers,
   parseLifeTrialReserveSlots,
+  resolveLifeAssignmentEnvOverrides,
 } from "../../apps/qq-bot/src/life-assignment.ts";
 
 const trials = [
@@ -65,6 +66,33 @@ test("generateLifeAssignmentRun keeps display capacity while reserving optimizer
   assert.ok(alchemy);
   assert.equal(alchemy.maxParticipants, 4);
   assert.equal(alchemy.roster.length, 2);
+});
+
+test("resolveLifeAssignmentEnvOverrides reads slug-specific env keys", () => {
+  const envTrials = [
+    ...trials,
+    {
+      trialHrid: "/guild_skilling/enhancing",
+      trialName: "强化",
+      skillHrid: "/skills/enhancing",
+      maxParticipants: 4,
+    },
+  ];
+  const previousTmd = process.env.MWI_LIFE_PINNED;
+  const previousWi = process.env.MWI_LIFE_PINNED_WI;
+  process.env.MWI_LIFE_PINNED = "adudu:强化";
+  process.env.MWI_LIFE_PINNED_WI = "foo:炼金";
+  try {
+    const tmd = resolveLifeAssignmentEnvOverrides("TMD", envTrials);
+    const wi = resolveLifeAssignmentEnvOverrides("WI", envTrials);
+    assert.equal(tmd.pinnedAssignments.get("adudu"), "/guild_skilling/enhancing");
+    assert.equal(wi.pinnedAssignments.get("foo"), "/guild_skilling/alchemy");
+  } finally {
+    if (previousTmd === undefined) delete process.env.MWI_LIFE_PINNED;
+    else process.env.MWI_LIFE_PINNED = previousTmd;
+    if (previousWi === undefined) delete process.env.MWI_LIFE_PINNED_WI;
+    else process.env.MWI_LIFE_PINNED_WI = previousWi;
+  }
 });
 
 test("generateLifeAssignmentRun honors pinned members", () => {

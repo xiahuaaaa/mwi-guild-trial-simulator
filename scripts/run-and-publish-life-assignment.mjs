@@ -30,8 +30,7 @@ const outputDirectory =
 
 const {
   generateLifeAssignmentRun,
-  parseLifePinnedMembers,
-  parseLifeTrialReserveSlots,
+  resolveLifeAssignmentEnvOverrides,
   weeklySkillingTrialsFromCatalog,
   formatLifeAssignmentRun,
 } = await import(
@@ -97,20 +96,13 @@ if (trials.length !== 4) {
   throw new Error(`expected 4 skilling trials, got ${trials.length}`);
 }
 
-const reservedSlotsByTrial = parseLifeTrialReserveSlots(
-  process.env.MWI_LIFE_RESERVE_SLOTS,
-);
-if (reservedSlotsByTrial.size) {
-  const lines = [...reservedSlotsByTrial.entries()].map(([key, count]) => `${key}:${count}`);
+const overrides = resolveLifeAssignmentEnvOverrides(guildId, trials);
+if (overrides.reservedSlotsByTrial.size) {
+  const lines = [...overrides.reservedSlotsByTrial.entries()].map(([key, count]) => `${key}:${count}`);
   console.log(`life reserve slots: ${lines.join(", ")}`);
 }
-
-const pinnedAssignments = parseLifePinnedMembers(
-  process.env.MWI_LIFE_PINNED,
-  trials,
-);
-if (pinnedAssignments.size) {
-  const lines = [...pinnedAssignments.entries()].map(([memberId, trialHrid]) => {
+if (overrides.pinnedAssignments.size) {
+  const lines = [...overrides.pinnedAssignments.entries()].map(([memberId, trialHrid]) => {
     const trial = trials.find((row) => row.trialHrid === trialHrid);
     return `${memberId}→${trial?.trialName ?? trialHrid}`;
   });
@@ -125,8 +117,7 @@ const run = generateLifeAssignmentRun({
     displayName: String(member.displayName ?? member.memberId),
     latestSnapshot: member.latestSnapshot,
   })),
-  reservedSlotsByTrial,
-  pinnedAssignments,
+  ...overrides,
 });
 
 console.log(formatLifeAssignmentRun(run));

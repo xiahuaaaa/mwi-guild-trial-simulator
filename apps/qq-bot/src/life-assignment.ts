@@ -13,6 +13,7 @@ import {
 import { scaledLifeTrialProgress } from "../../../packages/guild-trial-core/src/life-trial.ts";
 import { formatBeijingDate } from "./beijing-time.ts";
 import { finalLevelProgressPercent } from "./life-assignment-report.ts";
+import { normalizeApiSlug } from "./guild-report-paths.ts";
 
 type Json = Record<string, unknown>;
 
@@ -93,6 +94,27 @@ export function parseLifePinnedMembers(
     pinned.set(memberId, trial.trialHrid);
   }
   return pinned;
+}
+
+export function resolveLifeAssignmentEnvOverrides(
+  apiSlugInput: string | undefined,
+  trials: readonly WeeklySkillingTrial[],
+): {
+  reservedSlotsByTrial: Map<string, number>;
+  pinnedAssignments: Map<string, string>;
+} {
+  const apiSlug = normalizeApiSlug(apiSlugInput);
+  const suffix = apiSlug === "TMD" ? "" : `_${apiSlug}`;
+  const reserveSpec =
+    process.env[`MWI_LIFE_RESERVE_SLOTS${suffix}`] ??
+    (apiSlug === "TMD" ? process.env.MWI_LIFE_RESERVE_SLOTS : undefined);
+  const pinnedSpec =
+    process.env[`MWI_LIFE_PINNED${suffix}`] ??
+    (apiSlug === "TMD" ? process.env.MWI_LIFE_PINNED : undefined);
+  return {
+    reservedSlotsByTrial: parseLifeTrialReserveSlots(reserveSpec),
+    pinnedAssignments: parseLifePinnedMembers(pinnedSpec, trials),
+  };
 }
 
 export function formatLifeTrialsOverview(

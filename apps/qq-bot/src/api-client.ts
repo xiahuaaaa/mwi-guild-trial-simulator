@@ -1,5 +1,7 @@
 import { access, readFile } from "node:fs/promises";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   CombatBinding,
   CommandServicePort,
@@ -34,6 +36,7 @@ import {
   formatLifeAssignmentRun,
   formatLifeTrialsOverview,
   generateLifeAssignmentRun,
+  resolveLifeAssignmentEnvOverrides,
   resolveLifeTrialByToken,
   simulateLifeTrialForRoster,
   weeklySkillingTrialsFromCatalog,
@@ -42,12 +45,10 @@ import {
   formatLifeAssignmentReportSummary,
   renderLifeAssignmentReportPng,
   writeLifeAssignmentReportArtifacts,
-  LIFE_ASSIGNMENT_PUBLIC_PNG_URL,
 } from "./life-assignment-report.ts";
 import type { LifeAssignmentRun } from "../../packages/guild-trial-core/src/life-trial-optimizer.ts";
 import { publishLifeAssignmentReportToGithub } from "./life-assignment-publish.ts";
 import {
-  COMBAT_ASSIGNMENT_PUBLIC_INDEX_URL,
   formatCombatAssignmentReportSummary,
   LIFE_ASSIGNMENT_GALLERY_LABEL,
 } from "./combat-assignment-report.ts";
@@ -58,20 +59,49 @@ import {
   formatGuildProfessionReportSummary,
   renderGuildProfessionReportPngBase64,
 } from "./guild-profession-report.ts";
+import {
+  formatProfessionRatingSummary,
+  formatProfessionRatingText,
+  loadProfessionRatingDataset,
+  renderProfessionRatingPngBase64,
+} from "./profession-rating-report.ts";
 import { computeWorkforce, LIFE_SKILLS } from "./life-workforce.ts";
 import { formatBeijingTimestamp } from "./beijing-time.ts";
+import { guildMessageLabel } from "./guild-group-routing.ts";
+import { resolveGuildReportPaths } from "./guild-report-paths.ts";
+import {
+  greasyForkScriptPageUrl,
+  resolveWiGreasyForkScriptId,
+  WI_GITHUB_DIST,
+  wiGuildPluginInstallLinks,
+} from "./wi-plugin-install-urls.ts";
 import { assessCombatMemberReadiness, GUILD_TRIAL_MIN_ATTACK_LEVEL } from "../../../packages/optimizer/src/combat-member-readiness.mjs";
 import { formatWeaponEnhancementCheck } from "../../../packages/optimizer/src/combat-weapon-check.mjs";
-import { mkdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import {
+  combatReadinessOptionsForGuild,
+  formatShieldCapReason,
+  keepTopShieldsByDefense,
+  shieldsPerSideForGuild,
+} from "../../../packages/optimizer/src/combat-eligibility-policy.mjs";
 
 const BOTTLENECK_TOP_N = 40;
 const PROFESSION_DISTRIBUTION_ATTACK_LEVEL_THRESHOLD = GUILD_TRIAL_MIN_ATTACK_LEVEL;
 
-const PUBLIC_GUILD_PLUGIN_INSTALL_LINKS = [
+const QQ_BOT_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
+const WI_GREASYFORK_ID_FILE = path.join(
+  QQ_BOT_ROOT,
+  ".local/wi-greasyfork-script-id",
+);
+
+export const WI_GUILD_PLUGIN_INSTALL_URL = WI_GITHUB_DIST;
+
+const TMD_GUILD_PLUGIN_INSTALL_LINKS = [
   [
     "油叉（Greasy Fork）",
-    "https://update.greasyfork.org/scripts/588902/MWI%20%E5%85%AC%E4%BC%9A%E8%AF%95%E7%82%BC%E8%B5%84%E6%96%99%E5%90%8C%E6%AD%A5%E5%8A%A9%E6%89%8B.user.js",
+    greasyForkScriptPageUrl("588902"),
   ],
   [
     "Gitee",
@@ -82,6 +112,28 @@ const PUBLIC_GUILD_PLUGIN_INSTALL_LINKS = [
     "https://raw.githubusercontent.com/xiahuaaaa/mwi-guild-trial-helper/main/dist/mwi-guild-trial-sync.user.js",
   ],
 ] as const;
+
+function readWiGreasyForkScriptId(): string {
+  const fileValue = existsSync(WI_GREASYFORK_ID_FILE)
+    ? readFileSync(WI_GREASYFORK_ID_FILE, "utf8")
+    : "";
+  return resolveWiGreasyForkScriptId(
+    process.env.WI_GREASYFORK_SCRIPT_ID ??
+      process.env.MWI_WI_GREASYFORK_SCRIPT_ID,
+    fileValue,
+  );
+}
+
+function publicGuildPluginInstallLinks(apiSlug: string) {
+  if (apiSlug === "WI") {
+    const scriptId = readWiGreasyForkScriptId();
+    if (!scriptId) {
+      return [["GitHub", WI_GUILD_PLUGIN_INSTALL_URL]] as const;
+    }
+    return wiGuildPluginInstallLinks(scriptId);
+  }
+  return TMD_GUILD_PLUGIN_INSTALL_LINKS;
+}
 
 interface GuildApiClientConfig {
   baseUrl: string;
@@ -102,28 +154,98 @@ interface ApiFailure {
 
 type Json = Record<string, unknown>;
 
+/** Armor, elemental resist, and five-way evasion for guild boss command output. */
+export function formatGuildBossDefenseLine(monster: Json): string {
+  const resist = monster.resistance as Json | undefined;
+  const evasion = monster.evasion as Json | undefined;
+  const armorResist = [
+    `护甲 ${String(monster.armor ?? "?")}`,
+    `水/自然/火抗 ${String(resist?.water ?? "?")}/${String(resist?.nature ?? "?")}/${String(resist?.fire ?? "?")}`,
+  ].join("；");
+  const evasionLine = [
+    `刺/斩/钝/远程/魔法闪避 ${String(evasion?.stab ?? "?")}`,
+    String(evasion?.slash ?? "?"),
+    String(evasion?.smash ?? "?"),
+    String(evasion?.ranged ?? "?"),
+    String(evasion?.magic ?? "?"),
+  ].join("/");
+  return `${armorResist}；${evasionLine}`;
+}
+
+/** Trial label plus distinct monster name (e.g. 试炼虫群·试炼蜻蜓). */
+export function formatGuildBossMonsterLabel(
+  trialName: string,
+  monster: Json,
+  options: { multiMonsterTrial?: boolean } = {},
+): string {
+  const trial = trialName.trim();
+  const monsterName = String(monster.name ?? monster.nameZh ?? "").trim();
+  if (!trial) return monsterName;
+  if (!options.multiMonsterTrial || !monsterName || monsterName === trial) {
+    return trial;
+  }
+  return `${trial}·${monsterName}`;
+}
+
+export function formatGuildBossMonsterPanelLine(
+  trialName: string,
+  monster: Json,
+  options: {
+    multiMonsterTrial?: boolean;
+    participantCap?: string;
+    showParticipantCap?: boolean;
+  } = {},
+): string {
+  const accuracy = monster.accuracy as Json | undefined;
+  const damage = monster.damage as Json | undefined;
+  const style = Array.isArray(monster.combatStyleHrids)
+    ? monster.combatStyleHrids.map((hrid) => String(hrid).split("/").at(-1)).join("/")
+    : "";
+  const attack = Object.entries(accuracy ?? {})
+    .filter(([, value]) => typeof value === "number")
+    .map(([key, value]) => `${key}精准 ${String(value)}`)
+    .join("、");
+  const maxDamage = Object.entries(damage ?? {})
+    .filter(([key, value]) => key !== "defensive" && typeof value === "number" && Number(value) > 10)
+    .map(([key, value]) => `${key}伤害 ${String(value)}`)
+    .join("、");
+  const cap = options.showParticipantCap ? (options.participantCap ?? "") : "";
+  const label = formatGuildBossMonsterLabel(trialName, monster, {
+    multiMonsterTrial: options.multiMonsterTrial,
+  });
+  return [
+    `${label} Lv.${String(monster.level ?? 100)}${style ? `（${style}）` : ""}${cap}`,
+    `HP/MP ${String(monster.maxHp ?? "?")}/${String(monster.maxMp ?? "?")}`,
+    formatGuildBossDefenseLine(monster),
+    [attack, maxDamage].filter(Boolean).join("；"),
+  ].filter(Boolean).join("；");
+}
+
 export class GuildApiCommandService implements CommandServicePort {
   readonly #config: GuildApiClientConfig;
   readonly #combatTestPaths: CombatTestRunPaths;
 
   constructor(config: GuildApiClientConfig) {
+    const simulatorRoot = path.resolve(
+      config.simulatorRoot ?? defaultSimulatorRoot(process.cwd()),
+    );
+    const guildPaths = resolveGuildReportPaths(config.guildId, simulatorRoot);
     this.#config = {
       ...config,
       baseUrl: config.baseUrl.replace(/\/$/, ""),
       pluginId: config.pluginId ?? "guild-trial-member-exporter",
       testReportDirectory:
         config.testReportDirectory ??
-        process.env.MWI_TEST_REPORT_DIR,
+        process.env.MWI_TEST_REPORT_DIR ??
+        guildPaths.testReportArtifactsDir,
       memberPluginPath:
         config.memberPluginPath ??
         process.env.MWI_MEMBER_PLUGIN_PATH,
     };
-    const simulatorRoot = path.resolve(
-      config.simulatorRoot ?? defaultSimulatorRoot(process.cwd()),
-    );
     this.#combatTestPaths = resolveCombatTestPaths(simulatorRoot, {
       statePath: config.combatTestStatePath,
       logPath: config.combatTestLogPath,
+      apiSlug: config.guildId,
     });
   }
 
@@ -212,7 +334,13 @@ export class GuildApiCommandService implements CommandServicePort {
       const bindings = Array.isArray(bindingData.bindings)
         ? bindingData.bindings as Json[]
         : [];
-      return { text: formatProfessionDistribution(members, bindings) };
+      return {
+        text: formatProfessionDistribution(
+          members,
+          bindings,
+          this.#config.guildId,
+        ),
+      };
     });
   }
 
@@ -238,7 +366,7 @@ export class GuildApiCommandService implements CommandServicePort {
       });
       return {
         text: [
-          `TMD 当前公会名单（${members.length} 人）`,
+          `${guildMessageLabel(this.#config.guildId)} 当前公会名单（${members.length} 人）`,
           `已上传 ${uploadedCount}｜已绑定 ${boundCount}`,
           ...(lines.length ? lines : ["当前名单为空。"]),
         ].join("\n"),
@@ -425,31 +553,18 @@ export class GuildApiCommandService implements CommandServicePort {
           return `${String(trial.trialName ?? trial.trialHrid)}${signed}`;
         }).join("、");
         const combatLines = combat.flatMap((trial) => {
+          const trialName = String(trial.trialName ?? trial.trialHrid);
           const cap = trial.maxParticipants != null ? ` 上限${trial.maxParticipants}` : "";
           const monsters = Array.isArray(trial.monsters) ? trial.monsters as Json[] : [];
-          if (!monsters.length) return [`${String(trial.trialName ?? trial.trialHrid)}：怪物基础面板尚未随登录数据到达`];
-          return monsters.map((monster) => {
-            const resist = monster.resistance as Json | undefined;
-            const accuracy = monster.accuracy as Json | undefined;
-            const damage = monster.damage as Json | undefined;
-            const style = Array.isArray(monster.combatStyleHrids)
-              ? monster.combatStyleHrids.map((hrid) => String(hrid).split("/").at(-1)).join("/")
-              : "";
-            const attack = Object.entries(accuracy ?? {})
-              .filter(([, value]) => typeof value === "number")
-              .map(([key, value]) => `${key}精准 ${String(value)}`)
-              .join("、");
-            const maxDamage = Object.entries(damage ?? {})
-              .filter(([key, value]) => key !== "defensive" && typeof value === "number" && Number(value) > 10)
-              .map(([key, value]) => `${key}伤害 ${String(value)}`)
-              .join("、");
-            return [
-              `${String(trial.trialName ?? trial.trialHrid)} Lv.${String(monster.level ?? 100)}${style ? `（${style}）` : ""}${cap}`,
-              `HP/MP ${String(monster.maxHp ?? "?")}/${String(monster.maxMp ?? "?")}`,
-              `护甲 ${String(monster.armor ?? "?")}；水/自然/火抗 ${String(resist?.water ?? "?")}/${String(resist?.nature ?? "?")}/${String(resist?.fire ?? "?")}`,
-              [attack, maxDamage].filter(Boolean).join("；"),
-            ].filter(Boolean).join("；");
-          });
+          if (!monsters.length) return [`${trialName}：怪物基础面板尚未随登录数据到达`];
+          const multiMonsterTrial = monsters.length > 1;
+          return monsters.map((monster, index) =>
+            formatGuildBossMonsterPanelLine(trialName, monster, {
+              multiMonsterTrial,
+              participantCap: cap,
+              showParticipantCap: index === 0,
+            }),
+          );
         });
         return {
           text: [
@@ -465,14 +580,41 @@ export class GuildApiCommandService implements CommandServicePort {
       const fixture = await this.#request("/api/boss-fixture/current");
       const bosses = Array.isArray(fixture.bosses) ? fixture.bosses as Json[] : [];
       const lines = bosses.map((boss) => {
-        const resist = boss.resistance as Json | undefined;
         return [
           `${String(boss.nameZh)} Lv.${String(boss.level)}`,
           `HP/MP ${String(boss.maxHp)}/${String(boss.maxMp)}`,
-          `护甲 ${String(boss.armor)}；水/自然/火抗 ${String(resist?.water)}/${String(resist?.nature)}/${String(resist?.fire)}`,
+          formatGuildBossDefenseLine(boss),
         ].join("；");
       });
       return { text: `公会试炼 Boss（静态备用数据）\n${lines.join("\n")}` };
+    });
+  }
+
+  getProfessionRating(): Promise<ServiceResult<ServiceContent>> {
+    return this.#safe(async () => {
+      const dataset = loadProfessionRatingDataset();
+      try {
+        const images = [];
+        for (const level of dataset.levels) {
+          const base64 = await renderProfessionRatingPngBase64(level, {
+            apiSlug: this.#config.guildId,
+          });
+          images.push({
+            base64,
+            alt: `职业评级 Lv.${level.startLevel}`,
+          });
+        }
+        return {
+          text: formatProfessionRatingSummary(dataset),
+          images,
+        };
+      } catch (error) {
+        console.error(
+          "[profession-rating] image render failed, falling back to text:",
+          (error as Error).message ?? error,
+        );
+        return { text: formatProfessionRatingText(dataset) };
+      }
     });
   }
 
@@ -485,7 +627,7 @@ export class GuildApiCommandService implements CommandServicePort {
       return {
         text: [
           `公会插件 v${String(selected.version)}`,
-          ...PUBLIC_GUILD_PLUGIN_INSTALL_LINKS.map(
+          ...publicGuildPluginInstallLinks(this.#config.guildId).map(
             ([label, url]) => `${label}：${url}`,
           ),
           selected.notes ? String(selected.notes) : "",
@@ -501,7 +643,10 @@ export class GuildApiCommandService implements CommandServicePort {
       const selected = plugins.find((plugin) => plugin.pluginId === this.#config.pluginId);
       if (!selected) throw Object.assign(new Error("尚未登记公会插件安装地址。"), { status: 404 });
       const version = String(selected.version);
-      const installUrl = String(selected.installUrl);
+      const registeredInstallUrl = String(selected.installUrl);
+      const installUrl = publicGuildPluginInstallLinks(this.#config.guildId)
+        .find(([label]) => label === "油叉（Greasy Fork）")?.[1]
+        ?? registeredInstallUrl;
       const fileName = `MWI公会试炼资料同步助手-v${version}.user.js`;
       const memberPluginPath = this.#config.memberPluginPath?.trim();
       if (memberPluginPath) {
@@ -513,7 +658,12 @@ export class GuildApiCommandService implements CommandServicePort {
           file: memberPluginPath,
         };
       }
-      const fileUrl = `${this.#config.baseUrl}/mwi-guild-trial-exporter.user.js`;
+      // The API direct artifact is a legacy fallback and may lag behind the
+      // plugin version metadata. Use the guild's public Gitee raw artifact
+      // for the actual file transfer; the Greasy Fork URL above is a web page.
+      const fileUrl = publicGuildPluginInstallLinks(this.#config.guildId)
+        .find(([label]) => label === "Gitee")?.[1]
+        ?? registeredInstallUrl;
       const response = await fetch(fileUrl);
       if (!response.ok) {
         throw Object.assign(new Error("无法读取最新插件文件。"), { status: 502 });
@@ -570,7 +720,11 @@ export class GuildApiCommandService implements CommandServicePort {
       }
 
       const png = await this.#readLifeAssignmentPng(run.generatedAt).catch(
-        async () => renderLifeAssignmentReportPng(run),
+        async () => {
+          const rendered = await renderLifeAssignmentReportPng(run);
+          await this.#writeLifeAssignmentArtifacts(run, rendered);
+          return rendered;
+        },
       );
 
       return {
@@ -681,10 +835,12 @@ export class GuildApiCommandService implements CommandServicePort {
         displayName: String(member.displayName ?? member.memberId),
         latestSnapshot: member.latestSnapshot as Json | undefined,
       }));
+    const overrides = resolveLifeAssignmentEnvOverrides(this.#config.guildId, trials);
     const run = generateLifeAssignmentRun({
       weekStartAt: String(catalog.weekStartAt ?? new Date().toISOString()),
       trials,
       members,
+      ...overrides,
     });
     await this.#request(`/api/admin/guilds/${encodeURIComponent(this.#config.guildId)}/life-assignments/${kind}`, {
       method: "PUT",
@@ -699,15 +855,20 @@ export class GuildApiCommandService implements CommandServicePort {
   ): Promise<ServiceContent> {
     const shouldPublish = options.publish !== false &&
       process.env.MWI_LIFE_REPORT_PUBLISH !== "0";
-    const reportDirectory = resolveLifeReportDirectory();
+    const reportDirectory = resolveLifeReportDirectory(this.#config.guildId);
     let images: Array<{ base64: string; alt?: string }> | undefined;
-    let publicUrl = LIFE_ASSIGNMENT_PUBLIC_PNG_URL;
+    let publicUrl = resolveGuildReportPaths(this.#config.guildId).lifePublicPngUrl;
     let publishNote = "";
 
     try {
       const png = await renderLifeAssignmentReportPng(run);
       mkdirSync(reportDirectory, { recursive: true });
-      const artifacts = writeLifeAssignmentReportArtifacts(run, png, reportDirectory);
+      const artifacts = writeLifeAssignmentReportArtifacts(
+        run,
+        png,
+        reportDirectory,
+        { apiSlug: this.#config.guildId },
+      );
       images = [{ base64: png.toString("base64"), alt: "本周生活分工" }];
 
       if (shouldPublish) {
@@ -716,6 +877,7 @@ export class GuildApiCommandService implements CommandServicePort {
             run,
             pngPath: artifacts.pngPath,
             jsonPath: artifacts.jsonPath,
+            apiSlug: this.#config.guildId,
           });
           publicUrl = published.publicPngUrl;
           if (published.published) {
@@ -744,7 +906,10 @@ export class GuildApiCommandService implements CommandServicePort {
       };
     }
 
-    const summary = formatLifeAssignmentReportSummary(run, { publicUrl });
+    const summary = formatLifeAssignmentReportSummary(run, {
+      publicUrl,
+      apiSlug: this.#config.guildId,
+    });
     const text = `${options.textPrefix ?? ""}${summary}${
       publishNote ? `\n${publishNote}` : ""
     }`;
@@ -760,7 +925,9 @@ export class GuildApiCommandService implements CommandServicePort {
         return { text: formatGuildProfessionReport(members) };
       }
       try {
-        const base64 = await renderGuildProfessionReportPngBase64(report);
+        const base64 = await renderGuildProfessionReportPngBase64(report, {
+          apiSlug: this.#config.guildId,
+        });
         return {
           text: formatGuildProfessionReportSummary(report),
           images: [{ base64, alt: "公会专业技能 Top 20" }],
@@ -806,7 +973,10 @@ export class GuildApiCommandService implements CommandServicePort {
       const prunedMemberIds = await this.#pruneStaleBindings(members, bindings);
       const activeBindings = filterBindingsToActiveRoster(members, bindings);
       return {
-        text: formatUnavailableRoster(members, activeBindings, { prunedMemberIds }),
+        text: formatUnavailableRoster(members, activeBindings, {
+          prunedMemberIds,
+          guildId: this.#config.guildId,
+        }),
       };
     });
   }
@@ -901,14 +1071,16 @@ export class GuildApiCommandService implements CommandServicePort {
         images = [lifeImage, ...(images ?? [])];
       }
 
+      const guildPaths = resolveGuildReportPaths(this.#config.guildId);
       return {
         text: formatCombatAssignmentReportSummary({
           assignmentId: data.id as string | number | undefined,
           createdAtLabel: formatBeijingTimestamp(data.createdAt),
           summaryText,
           files,
-          publicIndexUrl: COMBAT_ASSIGNMENT_PUBLIC_INDEX_URL,
+          publicIndexUrl: guildPaths.combatPublicIndexUrl,
           includeLifeLink: true,
+          apiSlug: this.#config.guildId,
         }),
         images,
       };
@@ -926,7 +1098,10 @@ export class GuildApiCommandService implements CommandServicePort {
 
   async #readLifeReportGeneratedAt(): Promise<string | undefined> {
     try {
-      const manifestPath = path.join(resolveLifeReportDirectory(), "manifest.json");
+      const manifestPath = path.join(
+        resolveLifeReportDirectory(this.#config.guildId),
+        "manifest.json",
+      );
       const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
         generatedAt?: string;
       };
@@ -938,8 +1113,19 @@ export class GuildApiCommandService implements CommandServicePort {
     }
   }
 
+  async #writeLifeAssignmentArtifacts(
+    run: LifeAssignmentRun,
+    png: Buffer,
+  ): Promise<void> {
+    const reportDirectory = resolveLifeReportDirectory(this.#config.guildId);
+    mkdirSync(reportDirectory, { recursive: true });
+    writeLifeAssignmentReportArtifacts(run, png, reportDirectory, {
+      apiSlug: this.#config.guildId,
+    });
+  }
+
   async #readLifeAssignmentPng(expectedGeneratedAt?: string): Promise<Buffer> {
-    const reportDirectory = resolveLifeReportDirectory();
+    const reportDirectory = resolveLifeReportDirectory(this.#config.guildId);
     const pngPath = path.join(reportDirectory, "latest.png");
     const manifestPath = path.join(reportDirectory, "manifest.json");
     if (expectedGeneratedAt) {
@@ -1259,7 +1445,9 @@ function memberMeetsAttackThreshold(
 export function formatProfessionDistribution(
   members: readonly Json[],
   allBindings: readonly Json[],
+  apiSlug = "TMD",
 ): string {
+  const guildLabel = guildMessageLabel(apiSlug);
   const memberById = new Map(
     members.map((member) => [String(member.memberId), member]),
   );
@@ -1295,7 +1483,7 @@ export function formatProfessionDistribution(
     ),
   );
   const lines = [
-    `TMD 主职业分布（攻击≥${threshold}：${eligibleBindings.length}/${members.length} 人，已绑定 ${bindings.length} 人）`,
+    `${guildLabel} 主职业分布（攻击≥${threshold}：${eligibleBindings.length}/${members.length} 人，已绑定 ${bindings.length} 人）`,
     ...professionLines,
     `未绑定：${Math.max(0, members.length - bindings.length)}`,
   ];
@@ -1401,8 +1589,11 @@ export function filterBindingsToActiveRoster(
 export function formatUnavailableRoster(
   members: readonly Json[],
   bindings: readonly Json[],
-  options: { prunedMemberIds?: readonly string[] } = {},
+  options: { prunedMemberIds?: readonly string[]; guildId?: string } = {},
 ): string {
+  const guildId = options.guildId ?? "TMD";
+  const readinessOptions = combatReadinessOptionsForGuild(guildId);
+  const shieldsPerSide = shieldsPerSideForGuild(guildId);
   const memberMap = new Map(
     members.map((member) => [String(member.memberId), member]),
   );
@@ -1411,6 +1602,11 @@ export function formatUnavailableRoster(
     combatType: string;
     reason: string;
   }> = [];
+  const usableShields: Array<{
+    memberId: string;
+    combatType: string;
+    snapshot: Json | null;
+  }> = [];
 
   for (const binding of bindings) {
     const memberId = String(binding.memberId);
@@ -1418,12 +1614,34 @@ export function formatUnavailableRoster(
     const member = memberMap.get(memberId);
     if (!member) continue;
     const snapshot = member.latestSnapshot ?? null;
-    const readiness = assessCombatMemberReadiness(snapshot, combatType);
+    const readiness = assessCombatMemberReadiness(
+      snapshot,
+      combatType,
+      readinessOptions,
+    );
     if (!readiness.ok) {
       unavailable.push({
         memberId,
         combatType,
         reason: readiness.reason,
+      });
+      continue;
+    }
+    if (combatType === "盾") {
+      usableShields.push({ memberId, combatType, snapshot });
+    }
+  }
+
+  if (shieldsPerSide != null) {
+    const { dropped } = keepTopShieldsByDefense(
+      usableShields,
+      shieldsPerSide * 2,
+    );
+    for (const row of dropped) {
+      unavailable.push({
+        memberId: row.memberId,
+        combatType: "盾",
+        reason: formatShieldCapReason(row, shieldsPerSide),
       });
     }
   }
@@ -1615,16 +1833,10 @@ export function missingTestReportAssetsMessage(
   );
 }
 
-function resolveLifeReportDirectory(): string {
+function resolveLifeReportDirectory(guildId?: string): string {
   const fromEnv = process.env.MWI_LIFE_REPORT_DIR?.trim();
   if (fromEnv) return fromEnv;
-  const projectRoot = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "..",
-    "..",
-  );
-  return path.join(projectRoot, "artifacts/life-report");
+  return resolveGuildReportPaths(guildId).lifeReportArtifactsDir;
 }
 
 export { formatGuildProfessionReport } from "./guild-profession-report.ts";
