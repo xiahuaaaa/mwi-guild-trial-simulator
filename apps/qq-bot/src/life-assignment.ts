@@ -41,6 +41,32 @@ export function weeklySkillingTrialsFromCatalog(catalog: Json): WeeklySkillingTr
     );
 }
 
+/** Parse `MWI_LIFE_RESERVE_SLOTS` entries like `/guild_skilling/alchemy:2` or `炼金:2`. */
+export function parseLifeTrialReserveSlots(
+  spec: string | undefined,
+): Map<string, number> {
+  const reserved = new Map<string, number>();
+  if (!spec?.trim()) return reserved;
+  for (const entry of spec.split(/[,，\s]+/u)) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const [key, countText] = trimmed.split(/[:：]/u);
+    const count = Number(countText);
+    if (!key?.trim() || !Number.isInteger(count) || count < 1) {
+      throw new Error(`invalid life reserve slot entry: ${trimmed}`);
+    }
+    reserved.set(key.trim(), count);
+  }
+  return reserved;
+}
+
+export function resolveLifeTrialReserveCount(
+  trial: Pick<WeeklySkillingTrial, "trialHrid" | "trialName">,
+  reserved: ReadonlyMap<string, number>,
+): number {
+  return reserved.get(trial.trialHrid) ?? reserved.get(trial.trialName) ?? 0;
+}
+
 export function formatLifeTrialsOverview(
   catalog: Json,
   staleCapacityTrials: readonly string[] = [],
@@ -67,6 +93,7 @@ export function generateLifeAssignmentRun(input: {
   trials: readonly WeeklySkillingTrial[];
   members: Array<{ memberId: string; displayName: string; latestSnapshot?: Json }>;
   excludedMemberIds?: readonly string[];
+  reservedSlotsByTrial?: ReadonlyMap<string, number>;
 }): LifeAssignmentRun {
   const snapshotsByMemberId: Record<string, Json> = {};
   const members = input.members
@@ -78,13 +105,31 @@ export function generateLifeAssignmentRun(input: {
         displayName: member.displayName,
       };
     });
-  return optimizeLifeAssignments({
+  const reserved = input.reservedSlotsByTrial ?? new Map<string, number>();
+  const capacityByHrid = new Map(
+    input.trials.map((trial) => [trial.trialHrid, trial.maxParticipants]),
+  );
+  const trialsForOptimizer = input.trials.map((trial) => {
+    const reserve = resolveLifeTrialReserveCount(trial, reserved);
+    return {
+      ...trial,
+      maxParticipants: Math.max(1, trial.maxParticipants - reserve),
+    };
+  });
+  const run = optimizeLifeAssignments({
     weekStartAt: input.weekStartAt,
-    trials: input.trials,
+    trials: trialsForOptimizer,
     members,
     snapshotsByMemberId,
     excludedMemberIds: input.excludedMemberIds,
   });
+  return {
+    ...run,
+    trials: run.trials.map((trial) => ({
+      ...trial,
+      maxParticipants: capacityByHrid.get(trial.trialHrid) ?? trial.maxParticipants,
+    })),
+  };
 }
 
 export function formatLifeAssignmentRun(run: LifeAssignmentRun): string {

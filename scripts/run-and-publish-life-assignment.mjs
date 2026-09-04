@@ -21,12 +21,16 @@ const apiBase = (
   process.env.MWI_GUILD_API_BASE ?? "https://adudu.tailab136f.ts.net"
 ).replace(/\/$/, "");
 const guildId = process.env.MWI_GUILD_ID ?? "TMD";
+const { resolveGuildReportPaths } = await import(
+  pathToFileURL(path.join(projectRoot, "apps/qq-bot/src/guild-report-paths.ts")).href
+);
+const guildPaths = resolveGuildReportPaths(guildId, projectRoot);
 const outputDirectory =
-  process.env.MWI_LIFE_REPORT_DIR ??
-  path.join(projectRoot, "artifacts/life-report");
+  process.env.MWI_LIFE_REPORT_DIR ?? guildPaths.lifeReportArtifactsDir;
 
 const {
   generateLifeAssignmentRun,
+  parseLifeTrialReserveSlots,
   weeklySkillingTrialsFromCatalog,
   formatLifeAssignmentRun,
 } = await import(
@@ -36,7 +40,6 @@ const {
   formatLifeAssignmentReportSummary,
   renderLifeAssignmentReportPng,
   writeLifeAssignmentReportArtifacts,
-  LIFE_ASSIGNMENT_PUBLIC_PNG_URL,
 } = await import(
   pathToFileURL(
     path.join(projectRoot, "apps/qq-bot/src/life-assignment-report.ts"),
@@ -69,7 +72,7 @@ async function fetchJson(urlPath, init = {}) {
 }
 
 async function loadFromBackup() {
-  const backupDir = path.join(projectRoot, "backups/tmd/latest");
+  const backupDir = path.join(guildPaths.backupRootDir, "latest");
   const catalog = JSON.parse(
     await readFile(path.join(backupDir, "weekly-trials-current.json"), "utf8"),
   ).payload;
@@ -93,6 +96,14 @@ if (trials.length !== 4) {
   throw new Error(`expected 4 skilling trials, got ${trials.length}`);
 }
 
+const reservedSlotsByTrial = parseLifeTrialReserveSlots(
+  process.env.MWI_LIFE_RESERVE_SLOTS,
+);
+if (reservedSlotsByTrial.size) {
+  const lines = [...reservedSlotsByTrial.entries()].map(([key, count]) => `${key}:${count}`);
+  console.log(`life reserve slots: ${lines.join(", ")}`);
+}
+
 const run = generateLifeAssignmentRun({
   weekStartAt: String(catalog.weekStartAt ?? new Date().toISOString()),
   trials,
@@ -101,6 +112,7 @@ const run = generateLifeAssignmentRun({
     displayName: String(member.displayName ?? member.memberId),
     latestSnapshot: member.latestSnapshot,
   })),
+  reservedSlotsByTrial,
 });
 
 console.log(formatLifeAssignmentRun(run));
@@ -118,7 +130,9 @@ if (!fromBackup && !dryRun) {
 }
 
 const png = await renderLifeAssignmentReportPng(run);
-const artifacts = writeLifeAssignmentReportArtifacts(run, png, outputDirectory);
+const artifacts = writeLifeAssignmentReportArtifacts(run, png, outputDirectory, {
+  apiSlug: guildId,
+});
 await mkdir(outputDirectory, { recursive: true });
 await writeFile(
   path.join(outputDirectory, "README.md"),
@@ -131,13 +145,13 @@ await writeFile(
     `- 生成时间：\`${run.generatedAt}\``,
     `- 基础点数合计：\`${run.totalBasePoints}\``,
     "",
-    `公网图片：${LIFE_ASSIGNMENT_PUBLIC_PNG_URL}`,
+    `公网图片：${guildPaths.lifePublicPngUrl}`,
     "",
   ].join("\n"),
 );
 
 console.log(`wrote ${artifacts.pngPath}`);
-console.log(formatLifeAssignmentReportSummary(run));
+console.log(formatLifeAssignmentReportSummary(run, { apiSlug: guildId }));
 
 if (skipPublish) {
   console.log("skip-publish: local artifacts only");
@@ -149,6 +163,7 @@ const published = publishLifeAssignmentReportToGithub({
   pngPath: artifacts.pngPath,
   jsonPath: artifacts.jsonPath,
   dryRun,
+  apiSlug: guildId,
 });
 console.log(published.message);
 console.log(published.publicPngUrl);
