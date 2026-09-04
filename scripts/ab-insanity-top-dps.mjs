@@ -45,6 +45,10 @@ const apiBase = (
 ).replace(/\/$/, "");
 const adminKey = process.env.MWI_GUILD_API_ADMIN_KEY;
 const guildId = process.env.MWI_GUILD_ID ?? "TMD";
+const { resolveGuildReportPaths } = await import(
+  new URL("../apps/qq-bot/src/guild-report-paths.ts", import.meta.url).href
+);
+const guildPaths = resolveGuildReportPaths(guildId, projectDirectory);
 const screenSeconds = Number(
   process.env.MWI_GUILD_AOE_SCREEN_DURATION_SECONDS ?? 1800,
 );
@@ -63,18 +67,15 @@ const applyCounts = parseApplyCounts(applyArg);
 if (!adminKey) throw new Error("MWI_GUILD_API_ADMIN_KEY is required");
 
 const lab = JSON.parse(
-  await readFile(
-    path.join(projectDirectory, ".local/tmd-available-roster-composition-lab.json"),
-    "utf8",
-  ),
+  await readFile(guildPaths.availableRosterLabJsonPath, "utf8"),
 );
-assertCombatRulesVersion(lab, path.join(projectDirectory, ".local/tmd-available-roster-composition-lab.json"));
+assertCombatRulesVersion(lab, guildPaths.availableRosterLabJsonPath);
 const fixture = JSON.parse(
   await readFile(
     path.join(
       projectDirectory,
       process.env.MWI_GUILD_TRIAL_FIXTURE ??
-        "fixtures/monsters/guild-trial-2026-08-28-chameleon-swarm.json",
+        "fixtures/monsters/guild-trial-2026-09-04-badger-swarm.json",
     ),
     "utf8",
   ),
@@ -233,10 +234,7 @@ async function applyAndWrite(counts) {
       snapshotForMember(String(row.memberId), row.combatType);
     }
   }
-  const labPath = path.join(
-    projectDirectory,
-    ".local/tmd-available-roster-composition-lab.json",
-  );
+  const labPath = guildPaths.availableRosterLabJsonPath;
   for (const boss of lab.bosses ?? []) {
     const fixtureBoss = bossByPublicKey[boss.bossKey];
     if (!fixtureBoss) throw new Error(`fixture missing ${boss.bossKey}`);
@@ -583,7 +581,7 @@ function previousSnapshotWithGear(memberId, combatType) {
       .prepare(
         "SELECT payload_json FROM snapshots WHERE guild_id = ? AND member_id = ? ORDER BY id DESC LIMIT 8",
       )
-      .all("TMD", memberId);
+      .all(guildId, memberId);
     for (const row of rows) {
       const snap = JSON.parse(row.payload_json);
       const prepared = prepareSnapshotForCombat(snap, combatType);

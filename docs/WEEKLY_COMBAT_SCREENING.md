@@ -1,6 +1,6 @@
 # 每周战斗试炼筛选流程
 
-更新时间：2026-08-30（Asia/Shanghai）  
+更新时间：2026-09-04（Asia/Shanghai）  
 权威位置：本文。组合实验室、疯狂人数、自然奶转输出、发布脚本的默认行为以代码为准；改流程先改脚本再改本文。
 
 每周五 `00:00 UTC` 公会周重置后，用户说「做本周战斗模拟」时走这条流水线。  
@@ -14,6 +14,7 @@
 
 ```text
 确认技能包（有疑问先问用户，不要猜）
+  → 看 `docs/PROFESSION_DPS_TIERS.md`（DPS T 度参考，不能替代覆盖/实验室）
   → 拉本周 weekly-trials，生成 monster fixture
   → 按 Boss 对选用分区策略
   → 组合实验室（奶比 + 技能包 + 3600s×3 seed 终验）
@@ -33,7 +34,7 @@
 - 开发目录 `guild-trial-simulator/` 与运行副本 `/Users/xhy/.local/share/mwi-guild-server` 相互独立。
 - 密钥从 LaunchAgent 的 `api.env` 注入，**不要打印、复制、提交**。`api.env` 第 5 行有一处未加引号的路径，source 时可能警告 `qrcode.png`，忽略即可，key 仍会加载。
 - `npm test` **不要**先 source `api.env`：会泄漏 `MWI_TMD_ROSTER_REPORTERS` / NapCat token，弄挂 API 测试。
-- 默认排除不参加的人：TMD `xlsx,LBDYS,sh1ro`（`MWI_GUILD_EXCLUDE_MEMBERS`）；WI 默认不排除。
+- 默认排除不参加的人：TMD `xlsx,sh1ro`（`MWI_GUILD_EXCLUDE_MEMBERS`）；WI 默认不排除。
 - 攻击等级 `<110`、缺对应职业装备的人实验室会标不可用。
 - **WI 额外门槛（TMD 不变）**：绑定职业主属性 `<125` 不能进模拟（弓/弩=远程，枪/剑/锤=近战，火/水/自=魔法，盾=防御）；必须拥有该职业的 T95 或精炼★T95 武器；两边各只带 2 盾，按防御从高到低留 4 人、去掉其余盾。WI 默认每场上限 48。
 - 不解除 `simulationEngine: unavailable`，不用复制人冒充正式方案。
@@ -62,7 +63,7 @@ cd /Users/xhy/Downloads/mwi/guild-trial-simulator
 
 烟爆 / 法力喷泉 / 冰霜爆裂 / 粉尘 / 疫病 / 破甲 / 碎裂 / 致残 / 血刃。
 
-覆盖位按 **主技能等级 ×100 + 武器强化** 从低到高排，弱 DPS 先扛覆盖（疫病射击、烟爆等），不是预模拟。
+覆盖位按 **主技能等级 ×100 + 武器强化** 从低到高排，弱 DPS 先扛覆盖（疫病射击、烟爆等），不是预模拟。锤例外：按 **碎裂冲击** 等级排（近战技能高不等于锤输出高）。
 
 ### 2.2 虫群（AOE，已确认 2026-08-28）
 
@@ -131,7 +132,8 @@ node scripts/weekly-combat-fixture.mjs \
 | 单体 Boss | 物理多数 | 魔法多数 | 策略 id |
 |---|---|---|---|
 | **变色龙** `chameleon` | 变色龙 | 虫群 | `phys-chameleon-magic-swarm` |
-| 獾 / 刺猬 / 其他单体 | 虫群 | 单体 | `phys-swarm-magic-<stKey>` |
+| **獾** `badger` | 虫群 | 獾 | `aoe-swarm-fill-badger` |
+| 刺猬 / 其他单体 | 虫群 | 单体 | `phys-swarm-magic-<stKey>` |
 
 固定规则（对所有 ST+虫群周）：
 
@@ -140,10 +142,13 @@ node scripts/weekly-combat-fixture.mjs \
 - 每边只有守护光环等级最高的那名盾带守护光环，其余盾第 1 格复活。
 - 神秘光环优先到 `mysticAuraSide`。
 - 物理再平衡：高等级物理可换到 `physicalRebalanceSide`（变色龙周补单体）。
-- 超人数一侧溢到未满一侧（`applyTeamCaps`）。
-- 自然奶按 `NATURE_SWARM_RATIOS` = **0.4 / 0.5 / 0.6 / 0.3** 扫四个分区（`heal40` 等）。
+- 超人数一侧溢到未满一侧（`applyTeamCaps`）。獾周未满的獾侧按 **枪→剑→弓→弩→锤** 从虫群物理溢出里抽人；火/水先占獾座位。
+- 自然奶：变色龙/刺猬周按 `NATURE_SWARM_RATIOS` = **0.4 / 0.5 / 0.6 / 0.3** 扫四个分区（`heal40` 等）。**獾周**：獾留 `N` 名治疗自（扫 6/8/10/11），溢出自去虫群当奶；两边都是全治疗，再扫疯狂。
+- 獾周不做物理再平衡（避免把填獾的枪抽回虫群）。
 
 变色龙+虫群再出现时**直接复用** `phys-chameleon-magic-swarm`，不要改成獾周那套。
+
+职业木桩 T 度和「多数人该去哪边」见 `docs/PROFESSION_DPS_TIERS.md`。那是模板 DPS 参考，**不是**分区脚本；覆盖、光环、奶比、疯狂仍按上面规则 + 实验室。T 度表认为锤应去虫群、水母周弓弩应去水母——和当前两刀策略不完全一致时，分人前对照本文，不要用 T 度表跳过实验室。
 
 ---
 
@@ -259,7 +264,7 @@ node scripts/run-and-publish-combat-assignment.mjs --skip-sim
 |---|---|---|
 | `MWI_GUILD_TRIAL_FIXTURE` | 当前周 json | monster fixture |
 | `MWI_GUILD_TEAM_CAP` | TMD 52 / WI 48 | 每场人数上限 |
-| `MWI_GUILD_EXCLUDE_MEMBERS` | `xlsx,LBDYS,sh1ro` | 手动排除 |
+| `MWI_GUILD_EXCLUDE_MEMBERS` | `xlsx,sh1ro` | 手动排除 |
 | `MWI_GUILD_SCREEN_DURATION_SECONDS` | 180 | 单体技能包筛 |
 | `MWI_GUILD_AOE_SCREEN_DURATION_SECONDS` | 实验室 AOE 包=3600；A/B=1800 | 短筛时长 |
 | `MWI_GUILD_FINAL_DURATION_SECONDS` | 3600 | 终验 |

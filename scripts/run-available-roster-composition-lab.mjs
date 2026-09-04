@@ -52,8 +52,11 @@ import {
 import {
   applyTeamCaps,
   guardianAuraLevel,
+  isBadgerNatureMode,
+  NATURE_OVERFLOW_ST_DPS,
   pairStrategyForStKey,
   partitionPoliciesForStrategy,
+  PHYSICAL_ROLES,
   pickHighestGuardianAuraCarrier,
   pinMinimumRoleCounts,
   preferHighestMysticAuraOn,
@@ -75,8 +78,8 @@ const { resolveGuildReportPaths, parseExcludedMemberIds, labArtifactKind } = awa
 const guildPaths = resolveGuildReportPaths(guildId, projectDirectory);
 const fixturePath = path.join(
   projectDirectory,
-  process.env.MWI_GUILD_TRIAL_FIXTURE ??
-    "fixtures/monsters/guild-trial-2026-08-28-chameleon-swarm.json",
+      process.env.MWI_GUILD_TRIAL_FIXTURE ??
+    "fixtures/monsters/guild-trial-2026-09-04-badger-swarm.json",
 );
 const outputPath = guildPaths.availableRosterLabJsonPath;
 const screeningDurationSeconds = Number(
@@ -261,11 +264,20 @@ const boundDistribution = Object.fromEntries(
 const weekly = resolveWeeklyCombatBossPair(fixture);
 const bossByKey = partitionBossByKey(weekly);
 const pairStrategy = pairStrategyForStKey(weekly.stKey);
-const partitionPolicies = partitionPoliciesForStrategy(pairStrategy);
+const natureCount = usableByRole.get("自")?.length ?? 0;
+const partitionPolicies = partitionPoliciesForStrategy(pairStrategy, {
+  natureCount,
+});
 process.stdout.write(
   `可用绑定 ${availableCount} 人（不可用 ${unavailable.length}）；` +
     `职业 ${formatCounts(boundDistribution)}；每场上限 ${teamCap}；并行 ${workerCount}。\n` +
-    `说明：不按报名；排除 ${[...excludedMemberIds].join("/")}；${pairStrategy.ruleNote}；两边各留至少2个必要覆盖；盾平均分配，每边最高守护光环等级者带守护、其余盾复活；自然全治疗；非光环默认复活、前x输出改疯狂；${combatEligibilityNote(guildId, GUILD_TRIAL_MIN_ATTACK_LEVEL)}。\n`,
+    `说明：不按报名；排除 ${[...excludedMemberIds].join("/")}；${pairStrategy.ruleNote}；两边各留至少2个必要覆盖；盾平均分配，每边最高守护光环等级者带守护、其余盾复活；` +
+    (isBadgerNatureMode(pairStrategy.natureMode)
+      ? pairStrategy.natureMode === NATURE_OVERFLOW_ST_DPS
+        ? "自两边均匀当奶、溢出当输出去单体侧；"
+        : ""
+      : "自然全治疗；") +
+    `非光环默认复活、前x输出改疯狂；${combatEligibilityNote(guildId, GUILD_TRIAL_MIN_ATTACK_LEVEL)}。\n`,
 );
 
 const simPool = createSimPool(workerCount);
@@ -279,18 +291,26 @@ try {
       leftoversAfterCap,
       mergeRolePools,
       sumMap,
+      stFillRoleOrder: pairStrategy.stFillRoleOrder,
     });
+    const rebalanced = pairStrategy.physicalRebalanceSide
+      ? rebalancePhysicalToward(
+          pairStrategy.physicalRebalanceSide,
+          cappedPools,
+          {
+            roleOrder,
+            physicalCombatLevel,
+            targetLabel:
+              pairStrategy.physicalRebalanceSide === "chameleon"
+                ? weekly.stLabel
+                : weekly.swarmLabel,
+            log: (text) => process.stdout.write(text),
+          },
+        )
+      : cappedPools;
     const capped = preferHighestMysticAuraOn(
       pairStrategy.mysticAuraSide,
-      rebalancePhysicalToward(pairStrategy.physicalRebalanceSide, cappedPools, {
-        roleOrder,
-        physicalCombatLevel,
-        targetLabel:
-          pairStrategy.physicalRebalanceSide === "chameleon"
-            ? weekly.stLabel
-            : weekly.swarmLabel,
-        log: (text) => process.stdout.write(text),
-      }),
+      rebalanced,
       {
         roleOrder,
         mysticAuraLevel,
@@ -344,6 +364,7 @@ try {
               ...baseDefinition,
               roleTargets,
               bossKey: publicKey,
+              ...partitionKitExtras(policy, publicKey),
             };
             const team = createTeamFromSources(definition, sources);
             const run = await simPool.run({
@@ -598,7 +619,30 @@ try {
       insanityTopDps: insanityTopDpsCounts,
       auraAssignment: "guardian-on-highest-shield-others-revive",
       healerKit:
-        "st-rejuvenate-affinity-life_drain-entangle (lowest-3 pollen) / aoe-rejuvenate-pollen-veil-entangle",
+        isBadgerNatureMode(pairStrategy.natureMode)
+          ? pairStrategy.natureMode === NATURE_OVERFLOW_ST_DPS
+            ? "aoe-rejuvenate-pollen-veil-entangle; overflow nature DPS affinity-pollen-veil-entangle"
+            : "aoe-rejuvenate-pollen-veil-entangle; overflow nature healers on swarm"
+          : "st-rejuvenate-affinity-life_drain-entangle (lowest-3 pollen) / aoe-rejuvenate-pollen-veil-entangle",
+      natureHealerPerSide: isBadgerNatureMode(pairStrategy.natureMode)
+        ? partitionPolicies.find((policy) => policy.id === winner.partitionId)
+            ?.natureHealerPerSide ??
+          null
+        : null,
+      natureDpsFromHealers: natureDpsCountsFromBosses(winner.bosses),
+      natureDpsKit:
+        pairStrategy.natureMode === NATURE_OVERFLOW_ST_DPS
+          ? [
+              "/abilities/elemental_affinity",
+              "/abilities/toxic_pollen",
+              "/abilities/natures_veil",
+              "/abilities/entangle",
+            ]
+          : undefined,
+      natureDpsKitLabel:
+        pairStrategy.natureMode === NATURE_OVERFLOW_ST_DPS
+          ? "elemental-affinity-pollen-veil-entangle"
+          : undefined,
       seeds,
       workerCount,
     },
@@ -608,7 +652,13 @@ try {
       boundDistribution,
       unavailable,
       note:
-        `不使用报名名单。排除 ${[...excludedMemberIds].join("/") || "无"}。${pairStrategy.ruleNote}；两边各留至少2个必要覆盖；盾平均分配，每边最高守护光环等级者带守护、其余盾复活；自然全治疗；非光环默认复活、前x输出改疯狂${formatInsanityCounts(insanityTopDpsCounts)}；${combatEligibilityNote(guildId, GUILD_TRIAL_MIN_ATTACK_LEVEL)}。`,
+        `不使用报名名单。排除 ${[...excludedMemberIds].join("/") || "无"}。${pairStrategy.ruleNote}；两边各留至少2个必要覆盖；盾平均分配，每边最高守护光环等级者带守护、其余盾复活；` +
+        (isBadgerNatureMode(pairStrategy.natureMode)
+          ? pairStrategy.natureMode === NATURE_OVERFLOW_ST_DPS
+            ? "自两边均匀当奶、溢出当输出去单体侧；"
+            : ""
+          : "自然全治疗；") +
+        `非光环默认复活、前x输出改疯狂${formatInsanityCounts(insanityTopDpsCounts)}；${combatEligibilityNote(guildId, GUILD_TRIAL_MIN_ATTACK_LEVEL)}。`,
     },
     partitionSearch: screenedPartitions.map((row) => ({
       id: row.policy.id,
@@ -644,6 +694,12 @@ function partitionAvailableMembers(allSourcesByRole, policy) {
             snapshotSkillLevel(left.snapshot, "/skills/defense") ||
           left.memberId.localeCompare(right.memberId),
       );
+    }
+    if (role === "自" && isBadgerNatureMode(policy.natureMode)) {
+      sources.sort(compareLowDpsCoverageFirst);
+    }
+    if (PHYSICAL_ROLES.has(role) && isBadgerNatureMode(policy.natureMode)) {
+      sources.sort(compareLowDpsCoverageFirst);
     }
     for (let index = 0; index < sources.length; index += 1) {
       const side = policy.assign(role, index, sources.length);
@@ -687,9 +743,17 @@ function capTeamPool(poolByRole, cap) {
     );
   } else {
     const counts = countRoles(rankedByRole);
+    const extraPins = isBadgerNatureMode(pairStrategy.natureMode)
+      ? {
+          自: counts.自 ?? 0,
+          锤: counts.锤 ?? 0,
+          火: counts.火 ?? 0,
+          水: counts.水 ?? 0,
+        }
+      : {};
     const targets = pinMinimumRoleCounts(
       proportionalRoleTargets(counts, cap),
-      { 盾: counts.盾 ?? 0 },
+      { 盾: counts.盾 ?? 0, ...extraPins },
       cap,
     );
     capped = new Map(roleOrder.map((role) => [role, []]));
@@ -1112,6 +1176,45 @@ function createTeamFromSources(definition, sourcesByRole) {
   });
 }
 
+function partitionKitExtras(policy, publicKey) {
+  if (policy.natureMode !== NATURE_OVERFLOW_ST_DPS) return {};
+  return {
+    natureHealerPerSide: policy.natureHealerPerSide,
+    overflowNatureDps: publicKey !== "swarm",
+  };
+}
+
+function assignOverflowNatureDps(team, definition) {
+  if (!definition.overflowNatureDps) return;
+  const natures = team.filter((member) => member.combatType === "自");
+  if (!natures.length) return;
+  const keepHealers = Math.min(
+    natures.length,
+    Math.max(0, Number(definition.natureHealerPerSide ?? natures.length)),
+  );
+  const dpsCount = Math.max(0, natures.length - keepHealers);
+  const ranked = [...natures].sort(
+    (left, right) =>
+      coverageDpsProxy(right) - coverageDpsProxy(left) ||
+      left.memberId.localeCompare(right.memberId),
+  );
+  for (const [index, member] of ranked.entries()) {
+    member.duty = index < dpsCount ? "dps" : "healer";
+  }
+}
+
+function natureDpsCountsFromBosses(bosses) {
+  const counts = {};
+  for (const boss of bosses ?? []) {
+    const key = boss.bossKey;
+    if (!key) continue;
+    counts[key] = (boss.roster ?? []).filter(
+      (row) => row.combatType === "自" && row.duty === "dps",
+    ).length;
+  }
+  return counts;
+}
+
 function assignDuties(team, definition) {
   const waterSupportCount = Number(definition.waterSupportCount ?? 1);
   for (const member of team) {
@@ -1132,6 +1235,7 @@ function assignDuties(team, definition) {
     if (member.combatType === "剑") member.duty = "debuffer";
     if (member.combatType === "火") member.duty = "debuffer";
   }
+  assignOverflowNatureDps(team, definition);
 
   if (definition.rangedDebuffCount != null) {
     assignSwarmRangedDebuffers(team, definition.rangedDebuffCount);
@@ -1167,12 +1271,19 @@ function snapshotSkillLevel(snapshot, skillHrid) {
   return 0;
 }
 
-/** Lower primary skill / weapon enhance first so coverage kits sit on weaker DPS. */
+/** Lower primary skill / weapon enhance first so coverage kits sit on weaker DPS.
+ *  Hammers use 碎裂冲击: melee level is a poor DPS proxy (adudu melee 144 / smash 104). */
 function coverageDpsProxy(member) {
   const primary = PRIMARY_SKILL_BY_ROLE[member.combatType] ?? {
     skillHrid: "/skills/attack",
   };
-  const skill = snapshotSkillLevel(member.snapshot, primary.skillHrid);
+  let skill = snapshotSkillLevel(member.snapshot, primary.skillHrid);
+  if (member.combatType === "锤") {
+    const smash = Number(
+      member.snapshot?.learnedAbilities?.["/abilities/fracturing_impact"],
+    );
+    if (Number.isFinite(smash) && smash > 0) skill = smash;
+  }
   const weapon = member.build ? weaponFor(member.build) : null;
   const enhance = Number(weapon?.enhancementLevel ?? 0);
   return skill * 100 + enhance;

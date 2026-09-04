@@ -36,6 +36,21 @@ test("this week's chameleon/swarm fixture maps ST side onto the chameleon partit
   assert.equal(publicBossKey("swarm", weekly), "swarm");
 });
 
+test("this week's badger/swarm fixture maps ST side onto the chameleon partition key", async () => {
+  const fixture = JSON.parse(
+    await readFile(
+      path.join(fixtureDir, "guild-trial-2026-09-04-badger-swarm.json"),
+      "utf8",
+    ),
+  );
+  const weekly = resolveWeeklyCombatBossPair(fixture);
+  assert.equal(weekly.stKey, "badger");
+  assert.equal(weekly.stLabel, "试炼獾");
+  assert.equal(weekly.stBoss.enemiesPerEncounter, 2);
+  assert.equal(weekly.swarmBoss.enemiesPerEncounter, 4);
+  assert.equal(publicBossKey(ST_PARTITION_KEY, weekly), "badger");
+});
+
 test("previous badger/swarm fixture still maps ST side onto the chameleon partition key", async () => {
   const fixture = JSON.parse(
     await readFile(

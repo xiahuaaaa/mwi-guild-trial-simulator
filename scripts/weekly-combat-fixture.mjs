@@ -88,12 +88,16 @@ export function fixtureEnemyFromWeeklyMonster(monster) {
 }
 
 export function fixtureBossFromWeeklyTrial(trial) {
-  const enemies = (trial.monsters ?? []).map(fixtureEnemyFromWeeklyMonster);
+  let enemies = (trial.monsters ?? []).map(fixtureEnemyFromWeeklyMonster);
   if (!enemies.length) {
     throw new Error(`combat trial ${trial.trialHrid} has no monsters`);
   }
-  const first = enemies[0];
   const hrid = trial.trialHrid;
+  // Weekly-trials panel often lists one Trial Badger; the floor still spawns two.
+  if (hrid === "/guild_combat/badger" && enemies.length === 1) {
+    enemies = [enemies[0], structuredClone(enemies[0])];
+  }
+  const first = enemies[0];
   return {
     hrid,
     nameZh: trial.trialName ?? TRIAL_NAME_ZH[hrid] ?? first.nameZh,
@@ -123,9 +127,10 @@ export function fixtureIdForWeek(weekStartAt, combatHrids) {
   const day = String(weekStartAt ?? "").slice(0, 10);
   const keys = (combatHrids ?? [])
     .map((hrid) => lastHridSegment(hrid))
-    .filter(Boolean)
-    .join("-");
-  return `guild-trial-${day}-${keys}`;
+    .filter(Boolean);
+  const swarm = keys.filter((key) => key === "swarm");
+  const rest = keys.filter((key) => key !== "swarm");
+  return `guild-trial-${day}-${[...rest, ...swarm].join("-")}`;
 }
 
 export function fixtureFromWeeklyTrials(payload, options = {}) {
