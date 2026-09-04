@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   generateLifeAssignmentRun,
+  parseLifePinnedMembers,
   parseLifeTrialReserveSlots,
 } from "../../apps/qq-bot/src/life-assignment.ts";
 
@@ -64,4 +65,51 @@ test("generateLifeAssignmentRun keeps display capacity while reserving optimizer
   assert.ok(alchemy);
   assert.equal(alchemy.maxParticipants, 4);
   assert.equal(alchemy.roster.length, 2);
+});
+
+test("generateLifeAssignmentRun honors pinned members", () => {
+  const fullTrials = [
+    ...trials,
+    {
+      trialHrid: "/guild_skilling/enhancing",
+      trialName: "强化",
+      skillHrid: "/skills/enhancing",
+      maxParticipants: 4,
+    },
+  ];
+  const members = [
+    {
+      memberId: "adudu",
+      displayName: "adudu",
+      latestSnapshot: {
+        skills: {
+          "/skills/alchemy": 100,
+          "/skills/enhancing": 100,
+          "/skills/milking": 90,
+        },
+        loadoutCatalog: [
+          {
+            category: "profession",
+            actionTypeHrid: "/action_types/enhancing",
+            equipment: [{ itemHrid: "/items/enhancers_top", enhancementLevel: 0 }],
+          },
+        ],
+      },
+    },
+    member("b", "/skills/alchemy", 100),
+    member("c", "/skills/alchemy", 100),
+    member("d", "/skills/milking", 90),
+    member("e", "/skills/milking", 90),
+    member("f", "/skills/milking", 90),
+    member("g", "/skills/milking", 90),
+  ];
+  const run = generateLifeAssignmentRun({
+    weekStartAt: "2026-09-04T00:00:00.000Z",
+    trials: fullTrials,
+    members,
+    pinnedAssignments: parseLifePinnedMembers("adudu:强化", fullTrials),
+  });
+  const enhancing = run.trials.find((trial) => trial.trialHrid === "/guild_skilling/enhancing");
+  assert.ok(enhancing);
+  assert.ok(enhancing.roster.includes("adudu"));
 });

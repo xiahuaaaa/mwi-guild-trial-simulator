@@ -67,6 +67,34 @@ export function resolveLifeTrialReserveCount(
   return reserved.get(trial.trialHrid) ?? reserved.get(trial.trialName) ?? 0;
 }
 
+/** Parse `MWI_LIFE_PINNED` entries like `adudu:强化` or `adudu@/guild_skilling/enhancing`. */
+export function parseLifePinnedMembers(
+  spec: string | undefined,
+  trials: readonly WeeklySkillingTrial[],
+): Map<string, string> {
+  const pinned = new Map<string, string>();
+  if (!spec?.trim()) return pinned;
+  for (const entry of spec.split(/[,，\s]+/u)) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const separator = trimmed.search(/[:：@]/u);
+    if (separator < 1) {
+      throw new Error(`invalid life pinned member entry: ${trimmed}`);
+    }
+    const memberId = trimmed.slice(0, separator).trim();
+    const trialToken = trimmed.slice(separator + 1).trim();
+    if (!memberId || !trialToken) {
+      throw new Error(`invalid life pinned member entry: ${trimmed}`);
+    }
+    const trial = resolveLifeTrialByToken(trials, trialToken);
+    if (!trial) {
+      throw new Error(`unknown life trial for pin ${trimmed}: ${trialToken}`);
+    }
+    pinned.set(memberId, trial.trialHrid);
+  }
+  return pinned;
+}
+
 export function formatLifeTrialsOverview(
   catalog: Json,
   staleCapacityTrials: readonly string[] = [],
@@ -94,6 +122,7 @@ export function generateLifeAssignmentRun(input: {
   members: Array<{ memberId: string; displayName: string; latestSnapshot?: Json }>;
   excludedMemberIds?: readonly string[];
   reservedSlotsByTrial?: ReadonlyMap<string, number>;
+  pinnedAssignments?: ReadonlyMap<string, string>;
 }): LifeAssignmentRun {
   const snapshotsByMemberId: Record<string, Json> = {};
   const members = input.members
@@ -122,6 +151,7 @@ export function generateLifeAssignmentRun(input: {
     members,
     snapshotsByMemberId,
     excludedMemberIds: input.excludedMemberIds,
+    pinnedAssignments: input.pinnedAssignments,
   });
   return {
     ...run,

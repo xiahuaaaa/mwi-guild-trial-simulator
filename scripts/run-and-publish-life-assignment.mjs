@@ -30,6 +30,7 @@ const outputDirectory =
 
 const {
   generateLifeAssignmentRun,
+  parseLifePinnedMembers,
   parseLifeTrialReserveSlots,
   weeklySkillingTrialsFromCatalog,
   formatLifeAssignmentRun,
@@ -104,6 +105,18 @@ if (reservedSlotsByTrial.size) {
   console.log(`life reserve slots: ${lines.join(", ")}`);
 }
 
+const pinnedAssignments = parseLifePinnedMembers(
+  process.env.MWI_LIFE_PINNED,
+  trials,
+);
+if (pinnedAssignments.size) {
+  const lines = [...pinnedAssignments.entries()].map(([memberId, trialHrid]) => {
+    const trial = trials.find((row) => row.trialHrid === trialHrid);
+    return `${memberId}→${trial?.trialName ?? trialHrid}`;
+  });
+  console.log(`life pinned members: ${lines.join(", ")}`);
+}
+
 const run = generateLifeAssignmentRun({
   weekStartAt: String(catalog.weekStartAt ?? new Date().toISOString()),
   trials,
@@ -113,6 +126,7 @@ const run = generateLifeAssignmentRun({
     latestSnapshot: member.latestSnapshot,
   })),
   reservedSlotsByTrial,
+  pinnedAssignments,
 });
 
 console.log(formatLifeAssignmentRun(run));

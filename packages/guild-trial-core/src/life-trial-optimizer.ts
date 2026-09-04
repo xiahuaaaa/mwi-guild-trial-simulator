@@ -53,6 +53,8 @@ export interface OptimizeLifeAssignmentsInput {
   members: readonly LifeAssignmentMember[];
   snapshotsByMemberId: Readonly<Record<string, Json>>;
   excludedMemberIds?: readonly string[];
+  /** memberId -> trialHrid assignments that must not move during optimization */
+  pinnedAssignments?: ReadonlyMap<string, string>;
 }
 
 export function optimizeLifeAssignments(
@@ -81,6 +83,13 @@ export function optimizeLifeAssignments(
 
   const rosters = new Map(input.trials.map((trial) => [trial.trialHrid, [] as string[]]));
   const assigned = new Set<string>();
+  const pinnedMemberIds = applyPinnedAssignments(
+    input,
+    candidates,
+    rosters,
+    assigned,
+    input.pinnedAssignments ?? new Map(),
+  );
 
   while (true) {
     let best: {
@@ -121,7 +130,7 @@ export function optimizeLifeAssignments(
     assigned.add(best.memberId);
   }
 
-  improveBySwaps(input, rosters, candidates, assigned);
+  improveBySwaps(input, rosters, candidates, assigned, pinnedMemberIds);
 
   const assumptions = new Set<string>(["tea_crate_zero"]);
   const trialResults = input.trials.map((trial) => {
@@ -297,6 +306,43 @@ function totalObjective(
   }, emptyGain());
 }
 
+function applyPinnedAssignments(
+  input: OptimizeLifeAssignmentsInput,
+  candidates: Array<{
+    member: LifeAssignmentMember;
+    statsByTrial: Map<string, NonNullable<ReturnType<typeof buildLifeTrialMemberStats>>>;
+  }>,
+  rosters: Map<string, string[]>,
+  assigned: Set<string>,
+  pinnedAssignments: ReadonlyMap<string, string>,
+): Set<string> {
+  const pinnedMemberIds = new Set<string>();
+  for (const [memberId, trialHrid] of pinnedAssignments) {
+    const candidate = candidates.find(
+      (row) => row.member.memberId.toLocaleLowerCase() === memberId.toLocaleLowerCase(),
+    );
+    if (!candidate) {
+      throw new Error(`pinned life member not found or ineligible: ${memberId}`);
+    }
+    const trial = input.trials.find((row) => row.trialHrid === trialHrid);
+    if (!trial) {
+      throw new Error(`pinned life trial not found: ${trialHrid}`);
+    }
+    if (!candidate.statsByTrial.has(trialHrid)) {
+      throw new Error(`${memberId} cannot be pinned to ${trial.trialName}`);
+    }
+    const roster = rosters.get(trialHrid) ?? [];
+    if (roster.length >= trial.maxParticipants) {
+      throw new Error(`${trial.trialName} is full; cannot pin ${memberId}`);
+    }
+    roster.push(candidate.member.memberId);
+    rosters.set(trialHrid, roster);
+    assigned.add(candidate.member.memberId);
+    pinnedMemberIds.add(candidate.member.memberId);
+  }
+  return pinnedMemberIds;
+}
+
 function improveBySwaps(
   input: OptimizeLifeAssignmentsInput,
   rosters: Map<string, string[]>,
@@ -305,6 +351,7 @@ function improveBySwaps(
     statsByTrial: Map<string, NonNullable<ReturnType<typeof buildLifeTrialMemberStats>>>;
   }>,
   assigned: Set<string>,
+  pinnedMemberIds: ReadonlySet<string>,
 ): void {
   let improved = true;
   while (improved) {
@@ -314,6 +361,7 @@ function improveBySwaps(
       for (let j = i + 1; j < memberIds.length; j += 1) {
         const a = memberIds[i];
         const b = memberIds[j];
+        if (pinnedMemberIds.has(a) || pinnedMemberIds.has(b)) continue;
         const trialA = findTrialForMember(rosters, a);
         const trialB = findTrialForMember(rosters, b);
         if (!trialA || !trialB || trialA === trialB) continue;
