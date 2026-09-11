@@ -27,20 +27,31 @@ import {
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolveCombatRosterApiBase } from "./guild-api-base.mjs";
 
-import { assertCombatRulesVersion } from "../packages/shykai-full-runtime/src/combat-rules-version.mjs";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dryRun = process.argv.includes("--dry-run");
 const skipSim = process.argv.includes("--skip-sim");
 const skipPublish = process.argv.includes("--skip-publish");
 const skipApiPublish = process.argv.includes("--skip-api-publish");
+const guildId = process.env.MWI_GUILD_ID ?? "TMD";
+
+const { resolveGuildReportPaths } = await import(
+  pathToFileURL(
+    path.join(projectRoot, "apps/qq-bot/src/guild-report-paths.ts"),
+  ).href
+);
+const { assertCombatRulesVersion } = await import(
+  pathToFileURL(
+    path.join(projectRoot, "packages/shykai-full-runtime/src/combat-rules-version.mjs"),
+  ).href,
+);
+const guildPaths = resolveGuildReportPaths(guildId, projectRoot);
 
 const assignmentJsonPath =
-  process.env.MWI_AVAILABLE_REPORT_JSON ??
-  path.join(projectRoot, ".local/tmd-available-roster-composition-lab.json");
+  process.env.MWI_AVAILABLE_REPORT_JSON ?? guildPaths.availableRosterLabJsonPath;
 const outputDirectory =
-  process.env.MWI_TEST_REPORT_DIR ??
-  path.join(projectRoot, "artifacts/test-report");
+  process.env.MWI_TEST_REPORT_DIR ?? guildPaths.testReportArtifactsDir;
 
 function run(cmd, args, env = process.env) {
   const result = spawnSync(cmd, args, {
@@ -64,8 +75,7 @@ if (!skipSim) {
   console.log("==> running available-roster composition lab");
   run(process.execPath, ["scripts/run-available-roster-composition-lab.mjs"], {
     ...process.env,
-    MWI_GUILD_API_BASE:
-      process.env.MWI_GUILD_API_BASE ?? "https://adudu.tailab136f.ts.net",
+    MWI_GUILD_API_BASE: resolveCombatRosterApiBase(),
   });
 } else {
   console.log(`==> skip-sim: using ${assignmentJsonPath}`);
@@ -82,6 +92,7 @@ const renderEnv = {
   ...process.env,
   MWI_AVAILABLE_REPORT_JSON: assignmentJsonPath,
   MWI_TEST_REPORT_DIR: outputDirectory,
+  MWI_GUILD_API_BASE: resolveCombatRosterApiBase(),
   MWI_REPORT_SEND: "0",
   // Assignment JSON goes to API; PNG assets are served from repo checkout /
   // public helper repo, so API asset upload is optional (older hosts may 404).
@@ -108,12 +119,14 @@ const {
   ).href
 );
 const {
-  COMBAT_ASSIGNMENT_PUBLIC_INDEX_URL,
   formatCombatAssignmentReportSummary,
 } = await import(
   pathToFileURL(
     path.join(projectRoot, "apps/qq-bot/src/combat-assignment-report.ts"),
   ).href
+);
+const { publishGuildAssignmentJsonToGitee } = await import(
+  pathToFileURL(path.join(projectRoot, "scripts/guild-report-gitee.mjs")).href,
 );
 
 writeFileSync(
@@ -126,7 +139,7 @@ writeFileSync(
     `- assignmentGeneratedAt：\`${assignment.generatedAt}\``,
     `- kind：\`${assignment.kind ?? ""}\``,
     "",
-    `公网浏览（可选图片）：${COMBAT_ASSIGNMENT_PUBLIC_INDEX_URL}`,
+    `公网浏览（可选图片）：${guildPaths.combatPublicIndexUrl}`,
     "",
     "QQ 命令：`本周分工`",
     "",
@@ -135,9 +148,10 @@ writeFileSync(
 
 // QQ bot LaunchAgent reads MWI_TEST_REPORT_DIR under the runtime install.
 // Keep that copy in sync when publishing from the workspace checkout.
+const runtimeBase = path.join(homedir(), ".local/share/mwi-guild-server");
 const runtimeReportDir = path.resolve(
   process.env.MWI_RUNTIME_TEST_REPORT_DIR ??
-    path.join(homedir(), ".local/share/mwi-guild-server/artifacts/test-report"),
+    path.join(runtimeBase, path.relative(projectRoot, guildPaths.testReportArtifactsDir)),
 );
 if (
   existsSync(path.dirname(runtimeReportDir)) &&
@@ -152,6 +166,7 @@ console.log(
   formatCombatAssignmentReportSummary({
     summaryText: String(assignment.summaryText ?? ""),
     files,
+    apiSlug: guildId,
   }),
 );
 
@@ -169,6 +184,18 @@ const published = publishCombatAssignmentReportToGithub({
   englishFiles: Array.isArray(manifest.englishFiles) ? manifest.englishFiles : [],
   assignmentJsonPath: path.join(outputDirectory, "latest.json"),
   dryRun,
+  apiSlug: guildId,
 });
 console.log(published.message);
 console.log(published.publicBaseUrl);
+
+const giteePublished = await publishGuildAssignmentJsonToGitee({
+  apiSlug: guildId,
+  assignmentKind: "combat",
+  jsonPath: path.join(outputDirectory, "latest.json"),
+  projectRoot,
+  generatedAt: String(assignment.generatedAt),
+  dryRun,
+});
+console.log(giteePublished.message);
+console.log(giteePublished.url);

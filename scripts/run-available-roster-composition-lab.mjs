@@ -50,6 +50,11 @@ import {
   resolveWeeklyCombatBossPair,
 } from "./weekly-combat-boss-pair.mjs";
 import {
+  DEFAULT_COMBAT_ROSTER_API_BASE,
+  combatRosterApiIsLoopback,
+  resolveCombatRosterApiBase,
+} from "./guild-api-base.mjs";
+import {
   applyTeamCaps,
   guardianAuraLevel,
   isBadgerNatureMode,
@@ -67,9 +72,12 @@ const projectDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const apiBase = (
-  process.env.MWI_GUILD_API_BASE ?? "https://adudu.tailab136f.ts.net"
-).replace(/\/$/, "");
+const apiBase = resolveCombatRosterApiBase();
+if (combatRosterApiIsLoopback(apiBase)) {
+  process.stderr.write(
+    `警告：战斗实验室正在读本机 API ${apiBase}，公会名单可能与 QQ 公网不一致。默认应使用 ${DEFAULT_COMBAT_ROSTER_API_BASE}\n`,
+  );
+}
 const adminKey = process.env.MWI_GUILD_API_ADMIN_KEY;
 const guildId = process.env.MWI_GUILD_ID ?? "TMD";
 const { resolveGuildReportPaths, parseExcludedMemberIds, labArtifactKind } = await import(

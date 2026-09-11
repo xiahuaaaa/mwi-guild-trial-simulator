@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 /**
- * A/B chameleon ST nature healers:
- *   majority 群疗/增幅/生命吸取/缠绕
- *   lowest-DPS 3 keep 群疗/增幅/粉尘/缠绕
- * Reverts any nature-DPS conversion on chameleon (both kits start with 群疗).
- *
- * Playbook: docs/WEEKLY_COMBAT_SCREENING.md
+ * WI-oriented chameleon A/B: keep 2 lowest-DPS 弓/弩 on 疫病射击,
+ * swap 疫病射击 → 稳定射击 on the remaining ranged.
  *
  * Usage:
- *   MWI_GUILD_API_ADMIN_KEY=... node scripts/ab-chameleon-st-nature-healers.mjs
- *   MWI_GUILD_API_ADMIN_KEY=... node scripts/ab-chameleon-st-nature-healers.mjs --apply
+ *   MWI_GUILD_API_ADMIN_KEY=... MWI_GUILD_ID=WI \
+ *     node scripts/ab-chameleon-st-ranged-steady.mjs
+ *   MWI_GUILD_API_ADMIN_KEY=... MWI_GUILD_ID=WI \
+ *     node scripts/ab-chameleon-st-ranged-steady.mjs --apply
  */
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -24,8 +22,9 @@ import { assertCombatRulesVersion } from "../packages/shykai-full-runtime/src/co
 import { selectCombatBuild } from "../packages/optimizer/src/combat-build-selection.mjs";
 import { prepareSnapshotForCombat } from "../packages/optimizer/src/combat-member-readiness.mjs";
 import {
-  applyStNatureHealerKits,
-  ST_NATURE_POLLEN_COVERAGE_COUNT,
+  applyStRangedPestilentCoverage,
+  rankedStRangedCoverageIds,
+  ST_RANGED_PESTILENT_COVERAGE_COUNT,
 } from "../packages/optimizer/src/combat-ability-templates.mjs";
 import { officialAbilityNameZh } from "../packages/mwi-data/official-zh-ability-names.mjs";
 import {
@@ -46,8 +45,8 @@ const { resolveGuildReportPaths } = await import(
   new URL("../apps/qq-bot/src/guild-report-paths.ts", import.meta.url).href
 );
 const guildPaths = resolveGuildReportPaths(guildId, projectDirectory);
-const pollenCount = Number(
-  process.env.MWI_GUILD_ST_NATURE_POLLEN ?? ST_NATURE_POLLEN_COVERAGE_COUNT,
+const pestilentCount = Number(
+  process.env.MWI_GUILD_ST_RANGED_PESTILENT ?? ST_RANGED_PESTILENT_COVERAGE_COUNT,
 );
 const seeds = [1297565953, 1297565954, 1297565955];
 const durationSeconds = Number(
@@ -94,18 +93,29 @@ const memberMap = new Map(
   (membersData.members ?? []).map((row) => [String(row.memberId), row]),
 );
 
-const pollenMemberIds = rankedLowDpsNatureIds(
+const dpsByMemberId = new Map(
+  (chameleon.memberAverages ?? []).map((row) => [
+    String(row.memberId),
+    Number(row.averageDps ?? 0),
+  ]),
+);
+const pestilentMemberIds = rankedStRangedCoverageIds(
   chameleon.roster,
-  chameleon.memberAverages,
-).slice(0, pollenCount);
-const variantRoster = applyStNatureHealerKits(chameleon.roster, {
-  pollenMemberIds,
-  pollenCount,
+  dpsByMemberId,
+).slice(0, pestilentCount);
+const variantRoster = applyStRangedPestilentCoverage(chameleon.roster, {
+  pestilentMemberIds,
+  pestilentCount,
 });
+const steadyCount = variantRoster.filter(
+  (row) =>
+    (row.combatType === "弓" || row.combatType === "弩") &&
+    row.duty === "dps",
+).length;
 
 process.stdout.write(
-  `变色龙自然：多数=群疗/增幅/生命吸取/缠绕；粉尘覆盖 ${pollenCount} 人（低 DPS）：${pollenMemberIds.join("、") || "无人"}\n` +
-    `kogge 等自然输出会改回治疗。基线=${summarizeRuns(chameleon.runs)}\n`,
+  `变色龙弓弩：疫病覆盖 ${pestilentCount} 人（低 DPS）：${pestilentMemberIds.join("、") || "无人"}；` +
+    `其余 ${steadyCount} 人疫病→稳定射击。基线=${summarizeRuns(chameleon.runs)}\n`,
 );
 
 const simPool = createSimPool(workerCount);
@@ -125,12 +135,14 @@ try {
   );
   for (const run of runs) {
     process.stdout.write(
-      `  生命吸取方案 seed ${run.seed}: 层=${run.wavesCleared} 末层=${run.finalProgressPercent}% ` +
+      `  稳定射击方案 seed ${run.seed}: 层=${run.wavesCleared} 末层=${run.finalProgressPercent}% ` +
         `DPS=${Math.round(run.teamDps)} 死亡=${run.totalDeaths}\n`,
     );
   }
   const baseline = average(chameleon.runs);
   const variant = average(runs);
+  const scoreDelta =
+    mean(runs.map(score)) - mean((chameleon.runs ?? []).map(score));
   process.stdout.write(
     `\n=== 对比（新方案 − 当前发布）===\n` +
       `层 ${fmtDelta(variant.waves, baseline.waves)}（新 ${variant.waves.toFixed(2)} / 旧 ${baseline.waves.toFixed(2)}）\n` +
@@ -176,11 +188,9 @@ try {
       totalDeaths: run.totalDeaths,
       oomMembers: run.oomMembers,
     }));
-    chameleon.natureHealersConvertedToDps = 0;
-    chameleon.stNaturePollenCoverage = pollenMemberIds;
     if (chameleon.team?.duties) {
-      chameleon.team.duties.healer = chameleon.roster.filter(
-        (row) => row.duty === "healer",
+      chameleon.team.duties.debuffer = chameleon.roster.filter(
+        (row) => row.duty === "debuffer",
       ).length;
       chameleon.team.duties.dps = chameleon.roster.filter(
         (row) => row.duty === "dps",
@@ -188,23 +198,21 @@ try {
     }
     lab.rules = {
       ...(lab.rules ?? {}),
-      natureDpsFromHealers: {
-        ...(lab.rules?.natureDpsFromHealers ?? {}),
-        chameleon: 0,
-      },
-      stNatureHealerKit: "rejuvenate/affinity/life_drain/entangle",
-      stNaturePollenCoverage: pollenMemberIds,
+      stRangedPestilentCoverage: pestilentMemberIds,
+      stRangedOptional: "steady_shot",
     };
     lab.generatedAt = new Date().toISOString();
-    lab.summaryText = rebuildSummaryText(lab);
+    lab.summaryText = rebuildSummaryText(lab, pestilentMemberIds);
     await writeFile(labPath, `${JSON.stringify(lab, null, 2)}\n`);
     process.stdout.write(`已写入 ${labPath}\n`);
+  } else if (scoreDelta <= 0) {
+    process.stdout.write("计分没有提升，不写回。加 --apply 才会覆盖 lab JSON。\n");
   }
 } finally {
   await simPool.close();
 }
 
-function rebuildSummaryText(assignment) {
+function rebuildSummaryText(assignment, pestilentIds) {
   const header = String(assignment.summaryText ?? "").split("\n").slice(0, 2);
   const pollen = assignment.rules?.stNaturePollenCoverage ?? [];
   const insanity = assignment.rules?.insanityTopDps ?? {};
@@ -212,6 +220,7 @@ function rebuildSummaryText(assignment) {
   const lines = [
     ...header,
     `规则：物理职业去变色龙、魔法职业去虫群；两边各留至少2个必要覆盖（烟爆/法力喷泉/冰霜爆裂/粉尘/疫病/破甲/碎裂/致残/血刃）；` +
+      `变色龙弓弩疫病覆盖 ${pestilentIds.length} 人（${pestilentIds.join("、") || "无人"}），其余稳定射击；` +
       `变色龙自然治疗群疗/增幅/生命吸取/缠绕，低DPS ${pollen.length}人（${pollen.join("、") || "无人"}）留粉尘；` +
       `虫群自然奶改输出 x=${natureCounts.swarm ?? 0}；` +
       `非光环默认复活、前x输出改疯狂（chameleon=${insanity.chameleon ?? 0}，swarm=${insanity.swarm ?? 0}）；` +
@@ -233,6 +242,10 @@ function rebuildSummaryText(assignment) {
       boss.bossKey === "chameleon" && pollen.length
         ? `；粉尘覆盖${pollen.join("、")}`
         : "";
+    const rangedNote =
+      boss.bossKey === "chameleon" && pestilentIds.length
+        ? `；疫病覆盖${pestilentIds.join("、")}，其余稳定射击`
+        : "";
     lines.push(
       `【${boss.bossName}】${boss.participantCount}人` +
         (boss.enemiesPerEncounter > 1
@@ -245,7 +258,8 @@ function rebuildSummaryText(assignment) {
           ? `；前${boss.insanityTopDpsCount}输出疯狂`
           : "") +
         (converted ? `；${converted}名自然奶改输出` : "") +
-        pollenNote,
+        pollenNote +
+        rangedNote,
       `技能包：${boss.selectedCandidate}`,
       `职业：${formatRoleCounts(boss.team?.roles)}`,
       `职责：坦克${boss.team?.duties?.tank ?? 0} 奶${boss.team?.duties?.healer ?? 0} ` +
@@ -267,24 +281,6 @@ function formatRoleCounts(roles = {}) {
     .filter((role) => Number(roles[role] ?? 0) > 0)
     .map((role) => `${role}${roles[role]}`)
     .join(" ");
-}
-
-function rankedLowDpsNatureIds(roster, memberAverages) {
-  const dps = new Map(
-    (memberAverages ?? []).map((row) => [
-      String(row.memberId),
-      Number(row.averageDps ?? 0),
-    ]),
-  );
-  return (roster ?? [])
-    .filter((row) => row.combatType === "自")
-    .sort(
-      (left, right) =>
-        (dps.get(String(left.memberId)) ?? 0) -
-          (dps.get(String(right.memberId)) ?? 0) ||
-        String(left.memberId).localeCompare(String(right.memberId)),
-    )
-    .map((row) => String(row.memberId));
 }
 
 function score(run) {

@@ -3,31 +3,38 @@ import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolveCombatRosterApiBase } from "./guild-api-base.mjs";
 
 const execFileAsync = promisify(execFile);
 const projectDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
+const guildId = process.env.MWI_GUILD_ID ?? "TMD";
+const { resolveGuildReportPaths } = await import(
+  pathToFileURL(
+    path.join(projectDirectory, "apps/qq-bot/src/guild-report-paths.ts"),
+  ).href
+);
+const guildPaths = resolveGuildReportPaths(guildId, projectDirectory);
 const inputPath =
-  process.env.MWI_AVAILABLE_REPORT_JSON ??
-  path.join(
-    projectDirectory,
-    ".local/tmd-available-roster-composition-lab.json",
-  );
+  process.env.MWI_AVAILABLE_REPORT_JSON ?? guildPaths.availableRosterLabJsonPath;
 const outputDirectory =
-  process.env.MWI_TEST_REPORT_DIR ??
-  path.join(projectDirectory, "artifacts/test-report");
-const groupId = Number(process.env.MWI_QQ_TMD_GROUP_ID ?? "532133273");
+  process.env.MWI_TEST_REPORT_DIR ?? guildPaths.testReportArtifactsDir;
+const groupEnvName = `MWI_QQ_${guildId.toUpperCase()}_GROUP_ID`;
+const groupId = Number(
+  process.env[groupEnvName] ??
+    (guildId === "TMD" ? (process.env.MWI_QQ_TMD_GROUP_ID ?? "532133273") : undefined) ??
+    process.env.MWI_QQ_GROUP_ID ??
+    "0",
+);
 const oneBotBase = (
   process.env.MWI_ONEBOT_API_BASE ?? "http://127.0.0.1:3000"
 ).replace(/\/$/, "");
 const shouldSend = process.env.MWI_REPORT_SEND === "1";
 const shouldPublishAssignment = process.env.MWI_REPORT_PUBLISH_ASSIGNMENT === "1";
 const shouldPublishAssets = process.env.MWI_REPORT_PUBLISH_ASSETS === "1";
-const apiBase = (
-  process.env.MWI_GUILD_API_BASE ?? "https://adudu.tailab136f.ts.net"
-).replace(/\/$/, "");
+const apiBase = resolveCombatRosterApiBase();
 const adminKey = process.env.MWI_GUILD_API_ADMIN_KEY ?? "";
 const rawLegacyFirstBossSlug = process.env.MWI_REPORT_LEGACY_FIRST_BOSS_SLUG;
 const legacyFirstBossSlug =
@@ -194,10 +201,11 @@ function summarizeBuffContribution(member, aura, locale = "zh") {
   return "<span class='muted'>—</span>";
 }
 
-const assignment = JSON.parse(await readFile(inputPath, "utf8"));
-if (!Array.isArray(assignment.bosses) || assignment.bosses.length === 0) {
-  throw new Error(`No bosses in report JSON: ${inputPath}`);
-}
+async function main() {
+  const assignment = JSON.parse(await readFile(inputPath, "utf8"));
+  if (!Array.isArray(assignment.bosses) || assignment.bosses.length === 0) {
+    throw new Error(`No bosses in report JSON: ${inputPath}`);
+  }
 
 const chromePath = await resolveChromePath();
 await mkdir(outputDirectory, { recursive: true });
@@ -305,9 +313,9 @@ if (shouldPublishAssignment) {
   if (!adminKey) {
     throw new Error("MWI_REPORT_PUBLISH_ASSIGNMENT=1 requires MWI_GUILD_API_ADMIN_KEY");
   }
-  const guildId = assignment.guildId ?? "TMD";
+  const targetGuildId = assignment.guildId ?? guildId ?? "TMD";
   const response = await fetch(
-    `${apiBase}/api/admin/guilds/${encodeURIComponent(guildId)}/assignments/test`,
+    `${apiBase}/api/admin/guilds/${encodeURIComponent(targetGuildId)}/assignments/test`,
     {
       method: "PUT",
       headers: {
@@ -330,7 +338,7 @@ if (shouldPublishAssets) {
   if (!adminKey) {
     throw new Error("MWI_REPORT_PUBLISH_ASSETS=1 requires MWI_GUILD_API_ADMIN_KEY");
   }
-  const guildId = assignment.guildId ?? "TMD";
+  const targetGuildId = assignment.guildId ?? guildId ?? "TMD";
   const files = [];
   for (const image of images) {
     files.push({
@@ -340,7 +348,7 @@ if (shouldPublishAssets) {
     });
   }
   const response = await fetch(
-    `${apiBase}/api/guilds/${encodeURIComponent(guildId)}/test-report-assets`,
+    `${apiBase}/api/guilds/${encodeURIComponent(targetGuildId)}/test-report-assets`,
     {
       method: "PUT",
       headers: {
@@ -408,11 +416,13 @@ process.stdout.write(
     2,
   )}\n`,
 );
+}
 
 function renderSummaryHtml(root, boss, locale = "zh") {
   const runs = Array.isArray(boss.runs) ? boss.runs : [];
   const roster = Array.isArray(boss.roster) ? boss.roster : [];
   const teamSize = boss.participantCount ?? boss.team?.size ?? roster.length;
+  const reportGuildLabel = String(root.guildId ?? guildId ?? "TMD").trim() || "TMD";
   const enemies = boss.enemiesPerEncounter ?? 1;
   const averageDps = average(runs.map((run) => Number(run.teamDps ?? 0)));
   const averageProgress = average(
@@ -477,7 +487,7 @@ function renderSummaryHtml(root, boss, locale = "zh") {
   if (locale === "zh") {
     return documentHtml(
       `
-    <header><h1>${escapeHtml(boss.bossName)} · TMD ${teamSize} 人可用重排</h1>
+    <header><h1>${escapeHtml(boss.bossName)} · ${escapeHtml(reportGuildLabel)} ${teamSize} 人可用重排</h1>
     <div class="sub">${escapeHtml(boss.selectedCandidate ?? "")}｜完整事件引擎｜${escapeHtml(root.generatedAt)}｜分区 ${escapeHtml(root.selectedPartition ?? "")}</div>
     <div class="warning">开发校准结果 / 不可转正：不按报名，可用 QQ 绑定成员互斥重排；无复制人；缺普通技能默认 Lv40；光环/无敌/复活/疯狂自动最优</div></header>
     <section class="metrics">
@@ -503,7 +513,7 @@ function renderSummaryHtml(root, boss, locale = "zh") {
   }
   return documentHtml(
     `
-    <header><h1>${escapeHtml(bossDisplayName(boss, locale))} · TMD ${teamSize} Available Roster</h1>
+    <header><h1>${escapeHtml(bossDisplayName(boss, locale))} · ${escapeHtml(reportGuildLabel)} ${teamSize} Available Roster</h1>
     <div class="sub">${escapeHtml(boss.selectedCandidate ?? "")} | Full event engine | ${escapeHtml(root.generatedAt)} | partition ${escapeHtml(root.selectedPartition ?? "")}</div>
     <div class="warning">Dev calibration / not for production: ignores sign-ups; re-rolls bound QQ members with mutual exclusion; no clones; missing common skills default to Lv40; auras / Invincible / Revive / Insanity auto-optimized</div></header>
     <section class="metrics">
@@ -818,3 +828,18 @@ async function oneBot(action, body) {
   }
   return payload;
 }
+
+const isMain =
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (isMain) {
+  await main();
+}
+
+export {
+  renderSummaryHtml,
+  renderMembersHtml,
+  bossDisplayName,
+  combatTypeName,
+  auraName,
+};

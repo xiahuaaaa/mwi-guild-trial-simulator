@@ -17,16 +17,19 @@ import {
 import { assertCombatRulesVersion } from "../packages/shykai-full-runtime/src/combat-rules-version.mjs";
 import { selectCombatBuild } from "../packages/optimizer/src/combat-build-selection.mjs";
 import { prepareSnapshotForCombat } from "../packages/optimizer/src/combat-member-readiness.mjs";
+import { resolveCombatRosterApiBase } from "./guild-api-base.mjs";
 
 const projectDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const apiBase = (
-  process.env.MWI_GUILD_API_BASE ?? "http://127.0.0.1:8787"
-).replace(/\/$/, "");
+const apiBase = resolveCombatRosterApiBase();
 const adminKey = process.env.MWI_GUILD_API_ADMIN_KEY;
 const guildId = process.env.MWI_GUILD_ID ?? "TMD";
+const { resolveGuildReportPaths } = await import(
+  new URL("../apps/qq-bot/src/guild-report-paths.ts", import.meta.url).href
+);
+const guildPaths = resolveGuildReportPaths(guildId, projectDirectory);
 const targetId = "adudu";
 const seeds = [1297565953, 1297565954, 1297565955];
 const durationSeconds = Number(
@@ -40,12 +43,9 @@ const workerCount = Math.max(
 if (!adminKey) throw new Error("MWI_GUILD_API_ADMIN_KEY is required");
 
 const lab = JSON.parse(
-  await readFile(
-    path.join(projectDirectory, ".local/tmd-available-roster-composition-lab.json"),
-    "utf8",
-  ),
+  await readFile(guildPaths.availableRosterLabJsonPath, "utf8"),
 );
-assertCombatRulesVersion(lab, path.join(projectDirectory, ".local/tmd-available-roster-composition-lab.json"));
+assertCombatRulesVersion(lab, guildPaths.availableRosterLabJsonPath);
 const fixture = JSON.parse(
   await readFile(
     path.join(

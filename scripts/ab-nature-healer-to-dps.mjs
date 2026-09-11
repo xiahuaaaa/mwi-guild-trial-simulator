@@ -36,14 +36,13 @@ import {
 } from "./weekly-combat-boss-pair.mjs";
 import { pairStrategyForStKey } from "./weekly-combat-partition.mjs";
 import { officialAbilityNameZh } from "../packages/mwi-data/official-zh-ability-names.mjs";
+import { resolveCombatRosterApiBase } from "./guild-api-base.mjs";
 
 const projectDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const apiBase = (
-  process.env.MWI_GUILD_API_BASE ?? "http://127.0.0.1:8787"
-).replace(/\/$/, "");
+const apiBase = resolveCombatRosterApiBase();
 const adminKey = process.env.MWI_GUILD_API_ADMIN_KEY;
 const guildId = process.env.MWI_GUILD_ID ?? "TMD";
 const { resolveGuildReportPaths } = await import(

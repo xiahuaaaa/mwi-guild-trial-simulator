@@ -32,6 +32,7 @@
 ## 1. 门禁
 
 - 开发目录 `guild-trial-simulator/` 与运行副本 `/Users/xhy/.local/share/mwi-guild-server` 相互独立。
+- **战斗模拟从公网读名单**：`MWI_GUILD_API_BASE` 默认 `https://api.adudu.lol`（与 QQ「公会名单」、成员插件同一份）。不要绑本机 `127.0.0.1:8787`——那份 sqlite 会和公网分叉。
 - 密钥从 LaunchAgent 的 `api.env` 注入，**不要打印、复制、提交**。`api.env` 第 5 行有一处未加引号的路径，source 时可能警告 `qrcode.png`，忽略即可，key 仍会加载。
 - `npm test` **不要**先 source `api.env`：会泄漏 `MWI_TMD_ROSTER_REPORTERS` / NapCat token，弄挂 API 测试。
 - 默认排除不参加的人：TMD `xlsx,sh1ro`（`MWI_GUILD_EXCLUDE_MEMBERS`）；WI 默认不排除。
@@ -45,7 +46,7 @@
 set -a
 source /Users/xhy/.local/share/mwi-guild-server/config/api.env
 set +a
-export MWI_GUILD_API_BASE="${MWI_GUILD_API_BASE:-http://127.0.0.1:8787}"
+export MWI_GUILD_API_BASE="${MWI_GUILD_API_BASE:-https://api.adudu.lol}"
 cd /Users/xhy/Downloads/mwi/guild-trial-simulator
 # WI：MWI_GUILD_ID=WI（默认上限 48、主属性≥125、T95 武器、每边 2 盾）
 ```
@@ -160,7 +161,7 @@ node scripts/run-available-roster-composition-lab.mjs 2>&1 \
   | tee .local/composition-lab-YYYY-MM-DD.log
 ```
 
-输入：全体已绑定可用快照（**不按报名**）。  
+输入：公网 API 的全体已绑定可用快照（**不按报名**，`/members` + `/qq-bindings`）。  
 输出：`.local/tmd-available-roster-composition-lab.json`（`kind=tmd-available-roster-composition-lab`，`promotable=false`）。
 
 实验室内部顺序：

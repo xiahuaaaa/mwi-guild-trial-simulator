@@ -15,6 +15,7 @@ import {
   withAgentPath,
   writeCombatTestRunState,
 } from "../../apps/qq-bot/src/combat-test-run.ts";
+import { TMD_DEFAULT_EXCLUDE_MEMBERS } from "../../apps/qq-bot/src/guild-report-paths.ts";
 import { GuildApiCommandService } from "../../apps/qq-bot/src/api-client.ts";
 import { createServer } from "node:http";
 
@@ -119,6 +120,49 @@ test("startCombatTestRun rejects a second job while one is running", () => {
   assert.match(conflict.message, /已有战斗模拟/u);
 });
 
+test("startCombatTestRun passes slug default exclude list when none requested", () => {
+  const paths = fakeSimulatorRoot();
+  const captured: Array<{ env?: NodeJS.ProcessEnv }> = [];
+  const started = startCombatTestRun({
+    paths,
+    requestedBy: "admin-1",
+    excludedCharacterNames: [],
+    notify: { chatKind: "private", userId: "admin-1" },
+    env: { MWI_GUILD_ID: "TMD" },
+    spawnImpl: (_cmd, _args, options) => {
+      captured.push({ env: options?.env as NodeJS.ProcessEnv | undefined });
+      return {
+        pid: process.pid,
+        unref() {},
+        on() {},
+      } as ReturnType<typeof import("node:child_process").spawn>;
+    },
+  });
+  assert.equal(started.ok, true);
+  assert.equal(captured[0]?.env?.MWI_GUILD_EXCLUDE_MEMBERS, TMD_DEFAULT_EXCLUDE_MEMBERS);
+});
+
+test("startCombatTestRun leaves WI exclude list empty when none requested", () => {
+  const paths = fakeSimulatorRoot();
+  const captured: Array<{ env?: NodeJS.ProcessEnv }> = [];
+  startCombatTestRun({
+    paths,
+    requestedBy: "admin-1",
+    excludedCharacterNames: [],
+    notify: { chatKind: "private", userId: "admin-1" },
+    env: { MWI_GUILD_ID: "WI" },
+    spawnImpl: (_cmd, _args, options) => {
+      captured.push({ env: options?.env as NodeJS.ProcessEnv | undefined });
+      return {
+        pid: process.pid,
+        unref() {},
+        on() {},
+      } as ReturnType<typeof import("node:child_process").spawn>;
+    },
+  });
+  assert.equal(captured[0]?.env?.MWI_GUILD_EXCLUDE_MEMBERS, "");
+});
+
 test("startCombatTestRun writes started text and a detached job can finish", async () => {
   const paths = fakeSimulatorRoot();
   const started = startCombatTestRun({
@@ -166,6 +210,16 @@ test("withAgentPath prepends Homebrew when LaunchAgent PATH is empty", () => {
   assert.match(env.PATH ?? "", /\/usr\/bin:\/bin/u);
 });
 
+test("resolveCombatTestPaths uses separate lock files for TMD and WI", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "mwi-combat-slug-"));
+  const tmdPaths = resolveCombatTestPaths(root, { apiSlug: "TMD" });
+  const wiPaths = resolveCombatTestPaths(root, { apiSlug: "WI" });
+  assert.match(tmdPaths.statePath, /combat-test-run\.json$/u);
+  assert.match(wiPaths.statePath, /wi-combat-test-run\.json$/u);
+  assert.notEqual(tmdPaths.statePath, wiPaths.statePath);
+  assert.notEqual(tmdPaths.logPath, wiPaths.logPath);
+});
+
 test("combat publish pipeline invokes nested scripts with process.execPath", async () => {
   const { readFile } = await import("node:fs/promises");
   const source = await readFile(
@@ -174,4 +228,22 @@ test("combat publish pipeline invokes nested scripts with process.execPath", asy
   );
   assert.match(source, /run\(process\.execPath/u);
   assert.equal(source.includes('run("node"'), false);
+});
+
+test("combat publish pipeline defaults every API call to the shared production API", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const sources = await Promise.all([
+    "../../scripts/guild-api-base.mjs",
+    "../../scripts/run-and-publish-combat-assignment.mjs",
+    "../../scripts/run-available-roster-composition-lab.mjs",
+    "../../scripts/render-and-send-available-roster-report.mjs",
+  ].map((relative) => readFile(new URL(relative, import.meta.url), "utf8")));
+  const [helper, ...pipeline] = sources;
+  assert.match(helper, /https:\/\/api\.adudu\.lol/u);
+  assert.doesNotMatch(helper, /https:\/\/adudu\.tailab136f\.ts\.net/u);
+  for (const source of pipeline) {
+    assert.match(source, /resolveCombatRosterApiBase/u);
+    assert.doesNotMatch(source, /https:\/\/adudu\.tailab136f\.ts\.net/u);
+    assert.doesNotMatch(source, /MWI_GUILD_API_BASE \?\? "http:\/\/127\.0\.0\.1:8787"/u);
+  }
 });
