@@ -48,3 +48,9 @@ export function defaultNatureDpsCounts(healerCount) {
   const cap = Math.max(0, Number(healerCount) || 0);
   return Array.from({ length: cap + 1 }, (_, index) => index);
 }
+
+/** Hedgehog side stays all-healer; swarm overflow still sweeps 0…n. */
+export function natureDpsSweepCountsForBoss(stKey, bossKey, healerCount) {
+  if (stKey === "hedgehog" && bossKey === "hedgehog") return [0];
+  return defaultNatureDpsCounts(healerCount);
+}

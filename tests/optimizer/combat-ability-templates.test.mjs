@@ -6,6 +6,10 @@ import {
   NATURE_DPS_FIXED_KIT,
   NATURE_HEALER_FIXED_KIT,
   applyStNatureHealerKits,
+  applyStRangedPestilentCoverage,
+  rankedStRangedCoverageIds,
+  PESTILENT_SHOT_HRID,
+  STEADY_SHOT_HRID,
   ST_NATURE_HEALER_DRAIN_KIT,
   ST_NATURE_HEALER_POLLEN_KIT,
   abilityTemplatesForBoss,
@@ -151,6 +155,29 @@ test("chameleon ST fire is 元素增幅/精确/烟爆/火球", () => {
   ]);
 });
 
+test("hedgehog ST fire is 增幅/烟爆/火焰风暴或精确/火球", () => {
+  const firestorm = ordinaryAbilityHridsForTemplate(
+    { combatType: "火", duty: "dps", roleIndex: 0 },
+    { bossKey: "hedgehog", fireOptional: "firestorm" },
+  );
+  assert.deepEqual(firestorm, [
+    "/abilities/elemental_affinity",
+    "/abilities/smoke_burst",
+    "/abilities/firestorm",
+    "/abilities/fireball",
+  ]);
+  const precision = ordinaryAbilityHridsForTemplate(
+    { combatType: "火", duty: "dps", roleIndex: 1 },
+    { bossKey: "hedgehog", fireOptional: "precision" },
+  );
+  assert.deepEqual(precision, [
+    "/abilities/elemental_affinity",
+    "/abilities/smoke_burst",
+    "/abilities/precision",
+    "/abilities/fireball",
+  ]);
+});
+
 test("chameleon ST spear is 狂暴/精确/破甲/狂速; sword matches swarm", () => {
   const spear = ordinaryAbilityHridsForTemplate(
     { combatType: "枪", duty: "debuffer", roleIndex: 0 },
@@ -207,6 +234,57 @@ test("chameleon ST healer is 群疗/增幅/生命吸取/缠绕; lowest 3 keep �
   assert.equal(patched[0].duty, "healer");
   assert.deepEqual(patched[0].abilityHrids.slice(1), ST_NATURE_HEALER_POLLEN_KIT);
   assert.deepEqual(patched[1].abilityHrids.slice(1), ST_NATURE_HEALER_DRAIN_KIT);
+});
+
+test("ST ranged keep 2 pestilent coverage and swap the rest to steady shot", () => {
+  const ranked = rankedStRangedCoverageIds(
+    [
+      { memberId: "strong", combatType: "弩" },
+      { memberId: "weak", combatType: "弓" },
+      { memberId: "mid", combatType: "弩" },
+      { memberId: "mage", combatType: "火" },
+    ],
+    new Map([
+      ["strong", 90],
+      ["weak", 10],
+      ["mid", 40],
+    ]),
+  );
+  assert.deepEqual(ranked, ["weak", "mid", "strong"]);
+  const patched = applyStRangedPestilentCoverage(
+    [
+      {
+        memberId: "weak",
+        combatType: "弓",
+        duty: "dps",
+        abilityHrids: [
+          "/abilities/insanity",
+          "/abilities/berserk",
+          "/abilities/precision",
+          PESTILENT_SHOT_HRID,
+          "/abilities/frenzy",
+        ],
+      },
+      {
+        memberId: "strong",
+        combatType: "弩",
+        duty: "dps",
+        abilityHrids: [
+          "/abilities/revive",
+          "/abilities/berserk",
+          "/abilities/precision",
+          PESTILENT_SHOT_HRID,
+          "/abilities/frenzy",
+        ],
+      },
+    ],
+    { pestilentMemberIds: ["weak"], pestilentCount: 2 },
+  );
+  assert.equal(patched[0].duty, "debuffer");
+  assert.ok(patched[0].abilityHrids.includes(PESTILENT_SHOT_HRID));
+  assert.equal(patched[1].duty, "dps");
+  assert.equal(patched[1].abilityHrids[3], STEADY_SHOT_HRID);
+  assert.equal(patched[1].abilityHrids[0], "/abilities/revive");
 });
 
 test("abilityTemplatesForBoss maps badger onto the AOE table", () => {

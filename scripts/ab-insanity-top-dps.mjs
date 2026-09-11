@@ -34,6 +34,7 @@ import {
   resolveWeeklyCombatBossPair,
 } from "./weekly-combat-boss-pair.mjs";
 import { pairStrategyForStKey } from "./weekly-combat-partition.mjs";
+import { compareProgressFirst, progressFirstScore } from "./combat-lab-score.mjs";
 import { officialAbilityNameZh } from "../packages/mwi-data/official-zh-ability-names.mjs";
 
 const projectDirectory = path.resolve(
@@ -75,7 +76,7 @@ const fixture = JSON.parse(
     path.join(
       projectDirectory,
       process.env.MWI_GUILD_TRIAL_FIXTURE ??
-        "fixtures/monsters/guild-trial-2026-09-04-badger-swarm.json",
+        "fixtures/monsters/guild-trial-2026-09-11-hedgehog-swarm.json",
     ),
     "utf8",
   ),
@@ -153,7 +154,7 @@ try {
       .sort(compareRows);
   }
 
-  process.stdout.write("\n将完整验证每边筛分前三的 x…\n");
+  process.stdout.write("\n将完整验证每边筛分前三的 x（不团灭、比末层进度）…\n");
   const finals = [];
   for (const screen of screens) {
     const top = screen.rows.slice(0, 3);
@@ -187,12 +188,7 @@ try {
         score: mean(runs.map((run) => score(run))),
       });
     }
-    verified.sort(
-      (left, right) =>
-        right.score - left.score ||
-        left.averageDeaths - right.averageDeaths ||
-        left.count - right.count,
-    );
+    verified.sort(compareProgressFirst);
     finals.push({
       bossName: screen.boss.bossName,
       ranked: screen.ranked,
@@ -201,7 +197,7 @@ try {
     });
   }
 
-  process.stdout.write("\n=== 最优 x ===\n");
+  process.stdout.write("\n=== 最优 x（不团灭、末层进度优先）===\n");
   for (const row of finals) {
     const win = row.winner;
     process.stdout.write(
@@ -514,23 +510,11 @@ function averageMembers(runs, durationSeconds = 3600) {
 }
 
 function compareRows(left, right) {
-  return (
-    right.score - left.score ||
-    Number(left.run.totalDeaths ?? 0) - Number(right.run.totalDeaths ?? 0) ||
-    left.count - right.count
-  );
+  return compareProgressFirst(left, right);
 }
 
 function score(run) {
-  const progress =
-    Number(run.finalMonsterMaxHp ?? 0) > 0
-      ? 1 - Number(run.finalMonsterHp ?? 0) / Number(run.finalMonsterMaxHp)
-      : Number(run.finalProgressPercent ?? 0) / 100;
-  return (
-    Number(run.wavesCleared ?? 0) * 1_000_000 -
-    Number(run.totalDeaths ?? 0) * 1_000 +
-    progress
-  );
+  return progressFirstScore(run);
 }
 
 function mean(values) {

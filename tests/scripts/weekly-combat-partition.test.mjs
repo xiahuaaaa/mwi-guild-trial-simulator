@@ -80,6 +80,49 @@ test("badger+swarm sends physical majority to swarm and fire/water to ST", () =>
   assert.equal(natures.filter((side) => side === "chameleon").length, 8);
 });
 
+test("hedgehog+swarm sends guns to hedgehog and crossbows/fire/water to swarm", () => {
+  const strategy = pairStrategyForStKey("hedgehog");
+  assert.equal(strategy.id, "gun-hedgehog-aoe-swarm");
+  assert.equal(strategy.physicalMajority, "swarm");
+  assert.equal(strategy.magicMajority, "swarm");
+  assert.equal(strategy.roleMajority.枪, "chameleon");
+  assert.equal(strategy.natureMode, "st-healers-overflow-swarm-healers");
+  assert.deepEqual(strategy.stFillRoleOrder, ["火", "剑", "弩", "弓", "锤"]);
+  assert.equal(strategy.physicalRebalanceSide, null);
+  assert.equal(strategy.shieldPrimary, "chameleon");
+  assert.equal(strategy.mysticAuraSide, "swarm");
+
+  assert.equal(assignRoleToBoss("枪", 0, 10, { strategy, natureHealerPerSide: 8 }), "swarm");
+  assert.equal(assignRoleToBoss("枪", 2, 10, { strategy, natureHealerPerSide: 8 }), "chameleon");
+  assert.equal(assignRoleToBoss("弩", 0, 12, { strategy, natureHealerPerSide: 8 }), "chameleon");
+  assert.equal(assignRoleToBoss("弩", 2, 12, { strategy, natureHealerPerSide: 8 }), "swarm");
+  assert.equal(assignRoleToBoss("锤", 2, 9, { strategy, natureHealerPerSide: 8 }), "swarm");
+  assert.equal(assignRoleToBoss("火", 0, 12, { strategy, natureHealerPerSide: 8 }), "chameleon");
+  assert.equal(assignRoleToBoss("火", 2, 12, { strategy, natureHealerPerSide: 8 }), "swarm");
+  assert.equal(assignRoleToBoss("水", 2, 8, { strategy, natureHealerPerSide: 8 }), "swarm");
+  assert.equal(assignRoleToBoss("盾", 0, 2, { strategy, natureHealerPerSide: 8 }), "chameleon");
+  assert.equal(assignRoleToBoss("盾", 1, 2, { strategy, natureHealerPerSide: 8 }), "swarm");
+  const natures = Array.from({ length: 20 }, (_, index) =>
+    assignRoleToBoss("自", index, 20, { strategy, natureHealerPerSide: 8 }),
+  );
+  assert.equal(natures.filter((side) => side === "swarm").length, 12);
+  assert.equal(natures.filter((side) => side === "chameleon").length, 8);
+});
+
+test("hedgehog policies sweep ST healer counts; leftover nature go to swarm", () => {
+  const policies = partitionPoliciesForStrategy(pairStrategyForStKey("hedgehog"), {
+    natureCount: 20,
+  });
+  assert.deepEqual(
+    policies.map((policy) => policy.id),
+    [
+      "gun-hedgehog-aoe-swarm-stheal6",
+      "gun-hedgehog-aoe-swarm-stheal8",
+      "gun-hedgehog-aoe-swarm-stheal10",
+    ],
+  );
+});
+
 test("chameleon pair policies keep the heal-ratio suffix and ≥2 coverage", () => {
   const policies = partitionPoliciesForStrategy(pairStrategyForStKey("chameleon"));
   assert.deepEqual(
@@ -119,6 +162,44 @@ test("badger policies sweep ST healer counts; leftover nature go to swarm", () =
   assert.equal(natures.filter((side) => side === "chameleon").length, 8);
   assert.deepEqual(natureHealerPerSideCandidates(22), [6, 8, 10, 11]);
   assert.deepEqual(natureHealerPerSideCandidates(19), [6, 8, 9]);
+});
+
+test("hedgehog fill order pulls fire and crossbows before hammers", () => {
+  const base = new Map([
+    ["枪", [{ memberId: "spear-core" }]],
+    ["火", []],
+    ["剑", []],
+    ["弩", []],
+    ["弓", []],
+    ["锤", []],
+    ["自", [{ memberId: "healer-a" }]],
+  ]);
+  const overflow = new Map([
+    ["火", [{ memberId: "fire-1" }]],
+    ["剑", [{ memberId: "sword-1" }]],
+    ["弩", [{ memberId: "xbow-1" }, { memberId: "xbow-2" }]],
+    ["锤", [{ memberId: "hammer-1" }, { memberId: "hammer-2" }]],
+  ]);
+  const filled = fillUnderCapFromOverflow(base, overflow, 5, {
+    fillRoleOrder: ["火", "剑", "弩", "弓", "锤"],
+  });
+  assert.deepEqual(
+    filled.get("枪").map((row) => row.memberId),
+    ["spear-core"],
+  );
+  assert.deepEqual(
+    filled.get("火").map((row) => row.memberId),
+    ["fire-1"],
+  );
+  assert.deepEqual(
+    filled.get("剑").map((row) => row.memberId),
+    ["sword-1"],
+  );
+  assert.deepEqual(
+    filled.get("弩").map((row) => row.memberId),
+    ["xbow-1"],
+  );
+  assert.equal(filled.get("锤")?.length ?? 0, 0);
 });
 
 test("fillUnderCapFromOverflow pulls gun before hammer from physical overflow", () => {

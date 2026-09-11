@@ -4,6 +4,7 @@ import { NATURE_DPS_FIXED_KIT } from "../../packages/optimizer/src/combat-abilit
 import {
   convertNatureHealersToDps,
   defaultNatureDpsCounts,
+  natureDpsSweepCountsForBoss,
   rankedNatureHealerIds,
 } from "../../packages/optimizer/src/combat-nature-healer-to-dps.mjs";
 
@@ -54,4 +55,10 @@ test("converts the top X nature healers to affinity/pollen/veil/entangle DPS", (
 test("default counts are every integer from 0 through the healer cap", () => {
   assert.deepEqual(defaultNatureDpsCounts(4), [0, 1, 2, 3, 4]);
   assert.deepEqual(defaultNatureDpsCounts(0), [0]);
+});
+
+test("hedgehog week keeps ST nature as healers and still sweeps swarm", () => {
+  assert.deepEqual(natureDpsSweepCountsForBoss("hedgehog", "hedgehog", 8), [0]);
+  assert.deepEqual(natureDpsSweepCountsForBoss("hedgehog", "swarm", 3), [0, 1, 2, 3]);
+  assert.deepEqual(natureDpsSweepCountsForBoss("badger", "badger", 2), [0, 1, 2]);
 });

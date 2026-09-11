@@ -79,7 +79,7 @@ const guildPaths = resolveGuildReportPaths(guildId, projectDirectory);
 const fixturePath = path.join(
   projectDirectory,
       process.env.MWI_GUILD_TRIAL_FIXTURE ??
-    "fixtures/monsters/guild-trial-2026-09-04-badger-swarm.json",
+    "fixtures/monsters/guild-trial-2026-09-11-hedgehog-swarm.json",
 );
 const outputPath = guildPaths.availableRosterLabJsonPath;
 const screeningDurationSeconds = Number(
@@ -171,7 +171,54 @@ const stPackageCandidates = [
   },
 ];
 
+/** Hedgehog fire screens 火焰风暴 vs 精确; smoke + fireball stay fixed. */
+const hedgehogStPackageCandidates = [
+  {
+    id: "st-ranged-pestilent-firestorm",
+    crossbowSupportCount: 2,
+    rangedOptional: "pestilent_shot",
+    fireOptional: "firestorm",
+    spearOptional: "frenzy",
+  },
+  {
+    id: "st-ranged-pestilent-precision",
+    crossbowSupportCount: 2,
+    rangedOptional: "pestilent_shot",
+    fireOptional: "precision",
+    spearOptional: "frenzy",
+  },
+  {
+    id: "st-ranged-steady-firestorm",
+    crossbowSupportCount: 2,
+    rangedOptional: "steady_shot",
+    fireOptional: "firestorm",
+    spearOptional: "frenzy",
+  },
+  {
+    id: "st-ranged-steady-precision",
+    crossbowSupportCount: 2,
+    rangedOptional: "steady_shot",
+    fireOptional: "precision",
+    spearOptional: "frenzy",
+  },
+  {
+    id: "st-ranged-frenzy-firestorm",
+    crossbowSupportCount: 1,
+    rangedOptional: "frenzy",
+    fireOptional: "firestorm",
+    spearOptional: "frenzy",
+  },
+  {
+    id: "st-ranged-frenzy-precision",
+    crossbowSupportCount: 1,
+    rangedOptional: "frenzy",
+    fireOptional: "precision",
+    spearOptional: "frenzy",
+  },
+];
+
 function packageCandidatesForBoss(publicKey) {
+  if (publicKey === "hedgehog") return hedgehogStPackageCandidates;
   return isSingleTargetBossKey(publicKey)
     ? stPackageCandidates
     : aoePackageCandidates;
@@ -275,7 +322,9 @@ process.stdout.write(
     (isBadgerNatureMode(pairStrategy.natureMode)
       ? pairStrategy.natureMode === NATURE_OVERFLOW_ST_DPS
         ? "自两边均匀当奶、溢出当输出去单体侧；"
-        : ""
+        : pairStrategy.stKey === "hedgehog"
+          ? "刺猬留定额自当奶、溢出自去虫群当奶（虫群再按原策略转输出）；"
+          : ""
       : "自然全治疗；") +
     `非光环默认复活、前x输出改疯狂；${combatEligibilityNote(guildId, GUILD_TRIAL_MIN_ATTACK_LEVEL)}。\n`,
 );
@@ -699,6 +748,12 @@ function partitionAvailableMembers(allSourcesByRole, policy) {
       sources.sort(compareLowDpsCoverageFirst);
     }
     if (PHYSICAL_ROLES.has(role) && isBadgerNatureMode(policy.natureMode)) {
+      sources.sort(compareLowDpsCoverageFirst);
+    }
+    if (
+      (role === "火" || role === "水") &&
+      policy.strategy?.stKey === "hedgehog"
+    ) {
       sources.sort(compareLowDpsCoverageFirst);
     }
     for (let index = 0; index < sources.length; index += 1) {

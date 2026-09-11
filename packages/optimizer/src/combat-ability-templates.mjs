@@ -215,6 +215,69 @@ export const ST_NATURE_HEALER_POLLEN_KIT = [
 ];
 export const ST_NATURE_POLLEN_COVERAGE_COUNT = 3;
 
+export const PESTILENT_SHOT_HRID = "/abilities/pestilent_shot";
+export const STEADY_SHOT_HRID = "/abilities/steady_shot";
+/** ST chameleon: keep this many 弓/弩 on 疫病; the rest swap to 稳定射击. */
+export const ST_RANGED_PESTILENT_COVERAGE_COUNT = 2;
+
+function isRangedCombatType(role) {
+  return role === "弓" || role === "弩";
+}
+
+export function rankedStRangedCoverageIds(roster, dpsByMemberId = new Map()) {
+  return (roster ?? [])
+    .filter((row) => isRangedCombatType(row?.combatType))
+    .sort(
+      (left, right) =>
+        Number(dpsByMemberId.get(String(left.memberId)) ?? 0) -
+          Number(dpsByMemberId.get(String(right.memberId)) ?? 0) ||
+        String(left.memberId).localeCompare(String(right.memberId)),
+    )
+    .map((row) => String(row.memberId));
+}
+
+/**
+ * Lowest-DPS 弓/弩 keep 疫病射击; remaining ranged swap 疫病射击 → 稳定射击.
+ * Special/aura slot 0 is unchanged.
+ */
+export function applyStRangedPestilentCoverage(
+  roster,
+  {
+    pestilentMemberIds = [],
+    pestilentCount = ST_RANGED_PESTILENT_COVERAGE_COUNT,
+  } = {},
+) {
+  const keep = new Set(
+    (pestilentMemberIds ?? [])
+      .slice(0, Math.max(0, Number(pestilentCount) || 0))
+      .map(String),
+  );
+  return (roster ?? []).map((row) => {
+    const hrids = Array.isArray(row?.abilityHrids) ? [...row.abilityHrids] : [];
+    if (!isRangedCombatType(row?.combatType)) {
+      return { ...row, abilityHrids: hrids };
+    }
+    const coverage = keep.has(String(row.memberId));
+    const next = [...hrids];
+    if (coverage) {
+      if (!next.includes(PESTILENT_SHOT_HRID)) {
+        const steadyIndex = next.indexOf(STEADY_SHOT_HRID);
+        if (steadyIndex >= 0) next[steadyIndex] = PESTILENT_SHOT_HRID;
+      }
+    } else {
+      const pestilentIndex = next.indexOf(PESTILENT_SHOT_HRID);
+      if (pestilentIndex >= 0 && !next.includes(STEADY_SHOT_HRID)) {
+        next[pestilentIndex] = STEADY_SHOT_HRID;
+      }
+    }
+    return {
+      ...row,
+      duty: coverage ? "debuffer" : "dps",
+      abilityHrids: next,
+    };
+  });
+}
+
 export function applyStNatureHealerKits(
   roster,
   { pollenMemberIds = [], pollenCount = ST_NATURE_POLLEN_COVERAGE_COUNT } = {},
@@ -278,6 +341,18 @@ export const WATER_SUPPORT_COUNTS = [1, 2];
 export const HEDGEHOG_NATURE_DPS_FREE_SLOTS = NATURE_DPS_MIDDLE_SLOTS;
 /** @deprecated chameleon fire kit is fixed */
 export const HEDGEHOG_FIRE_FREE_SLOTS = ["firestorm", "flame_blast"];
+/** Hedgehog fire: 增幅 / 烟爆 / 火焰风暴或精确 / 火球 */
+export const HEDGEHOG_FIRE_MIDDLE_SLOTS = ["firestorm", "precision"];
+
+export function hedgehogFireKitHrids(fireOptional = "firestorm") {
+  const middle = fireOptional === "precision" ? "precision" : "firestorm";
+  return [
+    "/abilities/elemental_affinity",
+    "/abilities/smoke_burst",
+    `/abilities/${middle}`,
+    "/abilities/fireball",
+  ];
+}
 
 /** Single-target floors (hedgehog / chameleon). */
 export function isSingleTargetBossKey(bossKey) {
@@ -372,6 +447,9 @@ export function ordinaryAbilityHridsForTemplate(member, definition = {}) {
   }
 
   if (stBoss && role === "火") {
+    if (definition.bossKey === "hedgehog") {
+      return hedgehogFireKitHrids(definition.fireOptional);
+    }
     return [...templates.火.required];
   }
 

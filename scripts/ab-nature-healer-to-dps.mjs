@@ -26,7 +26,7 @@ import { inspectAvailableCombatWeapon } from "../packages/optimizer/src/combat-w
 import { NATURE_DPS_FIXED_KIT } from "../packages/optimizer/src/combat-ability-templates.mjs";
 import {
   convertNatureHealersToDps,
-  defaultNatureDpsCounts,
+  natureDpsSweepCountsForBoss,
   rankedNatureHealerIds,
 } from "../packages/optimizer/src/combat-nature-healer-to-dps.mjs";
 import {
@@ -78,7 +78,7 @@ const fixture = JSON.parse(
     path.join(
       projectDirectory,
       process.env.MWI_GUILD_TRIAL_FIXTURE ??
-        "fixtures/monsters/guild-trial-2026-09-04-badger-swarm.json",
+        "fixtures/monsters/guild-trial-2026-09-11-hedgehog-swarm.json",
     ),
     "utf8",
   ),
@@ -123,10 +123,17 @@ async function sweep() {
     if (!fixtureBoss) throw new Error(`fixture missing ${boss.bossKey}`);
     const statsByMemberId = natureHealerStats(boss.roster);
     const ranked = rankedNatureHealerIds(boss.roster, statsByMemberId);
-    const counts = defaultNatureDpsCounts(ranked.length);
+    const counts = natureDpsSweepCountsForBoss(
+      weekly.stKey,
+      boss.bossKey,
+      ranked.length,
+    );
     process.stdout.write(
       `\n## ${boss.bossName} 可改自然输出的奶 ${ranked.length} 人\n`,
     );
+    if (counts.length === 1 && counts[0] === 0) {
+      process.stdout.write("  （本周该侧锁全治疗，不转输出）\n");
+    }
     for (const memberId of ranked) {
       const stats = statsByMemberId.get(memberId) ?? {};
       process.stdout.write(

@@ -1,6 +1,6 @@
 # 每周战斗试炼筛选流程
 
-更新时间：2026-09-04（Asia/Shanghai）  
+更新时间：2026-09-11（Asia/Shanghai）  
 权威位置：本文。组合实验室、疯狂人数、自然奶转输出、发布脚本的默认行为以代码为准；改流程先改脚本再改本文。
 
 每周五 `00:00 UTC` 公会周重置后，用户说「做本周战斗模拟」时走这条流水线。  
@@ -88,13 +88,13 @@ cd /Users/xhy/Downloads/mwi/guild-trial-simulator
 | 弓/弩 | 狂暴 + 精确 + 疫病/稳定/狂速（实验室扫包） |
 | 剑 | 狂暴 + 精确 + 血刃斩 + 致残斩 |
 | 枪 | 狂暴 + 精确 + 破甲之刺 + **狂速**（锁死，不要贯心） |
-| 火 | 元素增幅 + 精确 + 烟爆灭影 + 火球（固定；`fireOptional` 扫包会打平） |
+| 火 | 变色龙：元素增幅 + 精确 + 烟爆灭影 + 火球（固定）。**刺猬**：增幅 + 烟爆 + **火焰风暴或精确**（实验室筛）+ 火球 |
 | 水支援 1–2 | 元素增幅 + 法力喷泉 + 冰霜爆裂 + 流水 |
 | 水输出 | 元素增幅 + 精确或冰枪 + 冰霜爆裂 + 流水 |
 | 自治疗 | 群体治疗术 + 元素增幅 + **生命吸取** + 缠绕（群疗仍是主治疗）。**DPS 最低的 3 名自然**改带粉尘：群疗 + 增幅 + 剧毒粉尘 + 缠绕 |
 | 盾 | 同虫群 |
 
-实验室 ST 技能包：`st-ranged-pestilent-smoke` / `st-ranged-pestilent-flameblast` / `st-ranged-steady-smoke` / `st-ranged-frenzy-pestilent`。
+实验室 ST 技能包：变色龙 `st-ranged-pestilent-smoke` / `st-ranged-pestilent-flameblast` / `st-ranged-steady-smoke` / `st-ranged-frenzy-pestilent`。刺猬远程包再交叉筛火中槽 `firestorm` / `precision`。
 
 ---
 
@@ -133,7 +133,8 @@ node scripts/weekly-combat-fixture.mjs \
 |---|---|---|---|
 | **变色龙** `chameleon` | 变色龙 | 虫群 | `phys-chameleon-magic-swarm` |
 | **獾** `badger` | 虫群 | 獾 | `aoe-swarm-fill-badger` |
-| 刺猬 / 其他单体 | 虫群 | 单体 | `phys-swarm-magic-<stKey>` |
+| **刺猬** `hedgehog` | 虫群（枪去刺猬） | 虫群 | `gun-hedgehog-aoe-swarm` |
+| 其他单体 | 虫群 | 单体 | `phys-swarm-magic-<stKey>` |
 
 固定规则（对所有 ST+虫群周）：
 
@@ -142,11 +143,11 @@ node scripts/weekly-combat-fixture.mjs \
 - 每边只有守护光环等级最高的那名盾带守护光环，其余盾第 1 格复活。
 - 神秘光环优先到 `mysticAuraSide`。
 - 物理再平衡：高等级物理可换到 `physicalRebalanceSide`（变色龙周补单体）。
-- 超人数一侧溢到未满一侧（`applyTeamCaps`）。獾周未满的獾侧按 **枪→剑→弓→弩→锤** 从虫群物理溢出里抽人；火/水先占獾座位。
-- 自然奶：变色龙/刺猬周按 `NATURE_SWARM_RATIOS` = **0.4 / 0.5 / 0.6 / 0.3** 扫四个分区（`heal40` 等）。**獾周**：獾留 `N` 名治疗自（扫 6/8/10/11），溢出自去虫群当奶；两边都是全治疗，再扫疯狂。
-- 獾周不做物理再平衡（避免把填獾的枪抽回虫群）。
+- 超人数一侧溢到未满一侧（`applyTeamCaps`）。獾周未满的獾侧按 **枪→剑→弓→弩→锤** 从虫群物理溢出里抽人；火/水先占獾座位。刺猬周未满的刺猬侧按 **火→剑→弩→弓→锤** 填（枪已在刺猬，不抽水）。
+- 自然奶：变色龙周按 `NATURE_SWARM_RATIOS` = **0.4 / 0.5 / 0.6 / 0.3** 扫四个分区（`heal40` 等）。**獾周 / 刺猬周**：单体留 `N` 名治疗自（扫 6/8/10/11），溢出自去虫群当奶；两边实验室都是全治疗，再扫疯狂。刺猬侧之后**不**转输出；虫群溢出自然再按原策略转输出。
+- 獾周 / 刺猬周不做物理再平衡（避免把填位的枪抽走）。
 
-变色龙+虫群再出现时**直接复用** `phys-chameleon-magic-swarm`，不要改成獾周那套。
+变色龙+虫群再出现时**直接复用** `phys-chameleon-magic-swarm`，不要改成獾周那套。刺猬+虫群复用 `gun-hedgehog-aoe-swarm`。
 
 职业木桩 T 度和「多数人该去哪边」见 `docs/PROFESSION_DPS_TIERS.md`。那是模板 DPS 参考，**不是**分区脚本；覆盖、光环、奶比、疯狂仍按上面规则 + 实验室。T 度表认为锤应去虫群、水母周弓弩应去水母——和当前两刀策略不完全一致时，分人前对照本文，不要用 T 度表跳过实验室。
 
@@ -196,6 +197,7 @@ node scripts/ab-insanity-top-dps.mjs 2>&1 \
 - 扫描 `0,2,4,…,32` 以及该边可改人数上限。
 - 1800s 初筛 → 每边前 3 个 x 做 3600s×3。
 - 光环位永不改疯狂。
+- **刺猬周**：计分改为不团灭（`party_wipe` 直接出局），然后比通关层数 + 末层进度；个人死亡不参与排名，同分取更激进的 x。组合实验室分区仍用带死亡罚分的 `standardLabScore`。
 
 出最优 x 后**立刻 apply**（会再跑一遍 3-seed 校验并写回 lab JSON）：
 
@@ -221,7 +223,7 @@ node scripts/ab-nature-healer-to-dps.mjs 2>&1 \
 - 当前转换技能（两边同一套）：元素增幅 / 剧毒粉尘 / 自然菌幕 / 缠绕。  
   注意：变色龙 **治疗**不要菌幕；转成输出后脚本仍用这套 AOE 输出包（含菌幕）。若要改成 ST 输出包（增幅/吸血/缠绕），先改 `combat-nature-healer-to-dps.mjs` 再扫，不要口头换包。
 - `MWI_GUILD_MAX_DEATHS` 默认 **0**：1800s 初筛优先 0 死的 x；若该边所有 x 都有死亡，则退回全体再取前三。变色龙经常已经有死亡，这边「最优」很可能是 **x=0（不转）**。
-- 扫描 `0 … 该边奶人数`。
+- 扫描 `0 … 该边奶人数`。**刺猬周**：刺猬侧锁 `x=0`（全治疗）；只扫虫群溢出自然。
 
 ```bash
 node scripts/ab-nature-healer-to-dps.mjs --apply=<stKey>:X,swarm:Y

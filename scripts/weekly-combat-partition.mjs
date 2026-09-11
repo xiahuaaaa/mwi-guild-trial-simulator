@@ -12,8 +12,11 @@
  *   nature: ST keeps N healers; leftover nature → swarm as healers
  *   leftover ST seats fill from physical overflow 枪→剑→弓→弩→锤
  *
- * hedgehog + swarm keeps 2026-08-21:
- *   physical majority → swarm, magic majority → ST
+ * hedgehog + swarm (2026-09-11):
+ *   枪 majority → hedgehog (T1)
+ *   锤/弩/剑/弓/火/水 majority → swarm (弩主体去虫群，溢出填刺猬)
+ *   nature: ST keeps N healers; leftover nature → swarm as healers
+ *   leftover hedgehog seats fill 火→剑→弩→弓→锤
  *
  * Coverage skills on both sides: 烟爆 / 法力喷泉 / 冰霜爆裂 / 粉尘 /
  * 疫病 / 破甲 / 碎裂 / 致残 / 血刃.
@@ -38,6 +41,8 @@ export function isBadgerNatureMode(mode) {
 }
 /** Leftover badger seats: physical overflow only, hammer last. */
 export const BADGER_ST_FILL_ROLES = ["枪", "剑", "弓", "弩", "锤"];
+/** Leftover hedgehog seats: fire first (T2), hammer last; do not pull water. */
+export const HEDGEHOG_ST_FILL_ROLES = ["火", "剑", "弩", "弓", "锤"];
 export const GUARDIAN_AURA_HRID = "/abilities/guardian_aura";
 
 export function guardianAuraLevel(member) {
@@ -112,6 +117,22 @@ export function pairStrategyForStKey(stKey) {
         "物理去虫群（溢出才上獾，锤最后）；火/水主体去獾；獾留定额自当奶，溢出自去虫群当奶",
     };
   }
+  if (stKey === "hedgehog") {
+    return {
+      id: "gun-hedgehog-aoe-swarm",
+      stKey,
+      physicalMajority: SWARM_PARTITION_KEY,
+      magicMajority: SWARM_PARTITION_KEY,
+      shieldPrimary: ST_PARTITION_KEY,
+      mysticAuraSide: SWARM_PARTITION_KEY,
+      physicalRebalanceSide: null,
+      natureMode: NATURE_OVERFLOW_SWARM_HEALERS,
+      stFillRoleOrder: HEDGEHOG_ST_FILL_ROLES,
+      roleMajority: { 枪: ST_PARTITION_KEY },
+      ruleNote:
+        "枪去刺猬；锤/弩/剑/弓/火/水去虫群（溢出按火→剑→弩→弓→锤填刺猬）；刺猬留定额自当奶，溢出自去虫群当奶",
+    };
+  }
   return {
     id: `phys-swarm-magic-${stKey}`,
     stKey,
@@ -164,6 +185,12 @@ function otherPartition(side) {
   return side === ST_PARTITION_KEY ? SWARM_PARTITION_KEY : ST_PARTITION_KEY;
 }
 
+function majoritySideForRole(role, strategy) {
+  if (strategy.roleMajority?.[role]) return strategy.roleMajority[role];
+  if (role === "火" || role === "水") return strategy.magicMajority;
+  return strategy.physicalMajority;
+}
+
 export function assignRoleToBoss(role, index, count, { strategy, natureRatio, natureHealerPerSide }) {
   const cover = coverageReserve(count);
   if (role === "盾") {
@@ -172,7 +199,8 @@ export function assignRoleToBoss(role, index, count, { strategy, natureRatio, na
       : otherPartition(strategy.shieldPrimary);
   }
   if (role === "火" || role === "水") {
-    return index < cover ? otherPartition(strategy.magicMajority) : strategy.magicMajority;
+    const majority = majoritySideForRole(role, strategy);
+    return index < cover ? otherPartition(majority) : majority;
   }
   if (role === "自") {
     if (strategy.natureMode === NATURE_OVERFLOW_SWARM_HEALERS) {
@@ -188,9 +216,8 @@ export function assignRoleToBoss(role, index, count, { strategy, natureRatio, na
       ? SWARM_PARTITION_KEY
       : ST_PARTITION_KEY;
   }
-  return index < cover
-    ? otherPartition(strategy.physicalMajority)
-    : strategy.physicalMajority;
+  const majority = majoritySideForRole(role, strategy);
+  return index < cover ? otherPartition(majority) : majority;
 }
 
 export function partitionPoliciesForStrategy(strategy, options = {}) {
