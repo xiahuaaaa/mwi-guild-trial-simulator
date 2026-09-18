@@ -16,7 +16,7 @@
  *   枪 majority → hedgehog (T1)
  *   锤/弩/剑/弓/火/水 majority → swarm (弩主体去虫群，溢出填刺猬)
  *   nature: ST keeps N healers; leftover nature → swarm as healers
- *   leftover hedgehog seats fill 火→剑→弩→弓→锤
+ *   leftover hedgehog seats fill 火→弩→剑→弓→自→锤
  *
  * Coverage skills on both sides: 烟爆 / 法力喷泉 / 冰霜爆裂 / 粉尘 /
  * 疫病 / 破甲 / 碎裂 / 致残 / 血刃.
@@ -41,8 +41,8 @@ export function isBadgerNatureMode(mode) {
 }
 /** Leftover badger seats: physical overflow only, hammer last. */
 export const BADGER_ST_FILL_ROLES = ["枪", "剑", "弓", "弩", "锤"];
-/** Leftover hedgehog seats: fire first (T2), hammer last; do not pull water. */
-export const HEDGEHOG_ST_FILL_ROLES = ["火", "剑", "弩", "弓", "锤"];
+/** Leftover hedgehog seats: fire then xbows, overflow nature before hammers; no water. */
+export const HEDGEHOG_ST_FILL_ROLES = ["火", "弩", "剑", "弓", "自", "锤"];
 export const GUARDIAN_AURA_HRID = "/abilities/guardian_aura";
 
 export function guardianAuraLevel(member) {
@@ -130,7 +130,7 @@ export function pairStrategyForStKey(stKey) {
       stFillRoleOrder: HEDGEHOG_ST_FILL_ROLES,
       roleMajority: { 枪: ST_PARTITION_KEY },
       ruleNote:
-        "枪去刺猬；锤/弩/剑/弓/火/水去虫群（溢出按火→剑→弩→弓→锤填刺猬）；刺猬留定额自当奶，溢出自去虫群当奶",
+        "枪去刺猬；锤/弩/剑/弓/火/水去虫群（溢出按火→弩→剑→弓→自→锤填刺猬）；刺猬留定额自当奶，溢出自去虫群当奶",
     };
   }
   return {

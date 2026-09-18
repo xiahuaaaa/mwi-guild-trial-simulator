@@ -12,6 +12,7 @@ import {
   assignRoleToBoss,
   coverageReserve,
   fillUnderCapFromOverflow,
+  HEDGEHOG_ST_FILL_ROLES,
   natureHealerPerSideCandidates,
   pairStrategyForStKey,
   partitionPoliciesForStrategy,
@@ -88,7 +89,8 @@ test("hedgehog+swarm sends guns to hedgehog and crossbows/fire/water to swarm", 
   assert.equal(strategy.magicMajority, "swarm");
   assert.equal(strategy.roleMajority.枪, "chameleon");
   assert.equal(strategy.natureMode, "st-healers-overflow-swarm-healers");
-  assert.deepEqual(strategy.stFillRoleOrder, ["火", "剑", "弩", "弓", "锤"]);
+  assert.deepEqual(strategy.stFillRoleOrder, HEDGEHOG_ST_FILL_ROLES);
+  assert.deepEqual(HEDGEHOG_ST_FILL_ROLES, ["火", "弩", "剑", "弓", "自", "锤"]);
   assert.equal(strategy.physicalRebalanceSide, null);
   assert.equal(strategy.shieldPrimary, "chameleon");
   assert.equal(strategy.mysticAuraSide, "swarm");
@@ -165,7 +167,7 @@ test("badger policies sweep ST healer counts; leftover nature go to swarm", () =
   assert.deepEqual(natureHealerPerSideCandidates(19), [6, 8, 9]);
 });
 
-test("hedgehog fill order pulls fire and crossbows before hammers", () => {
+test("hedgehog fill order pulls xbows then overflow nature before hammers", () => {
   const base = new Map([
     ["枪", [{ memberId: "spear-core" }]],
     ["火", []],
@@ -177,12 +179,12 @@ test("hedgehog fill order pulls fire and crossbows before hammers", () => {
   ]);
   const overflow = new Map([
     ["火", [{ memberId: "fire-1" }]],
-    ["剑", [{ memberId: "sword-1" }]],
     ["弩", [{ memberId: "xbow-1" }, { memberId: "xbow-2" }]],
+    ["自", [{ memberId: "healer-b" }]],
     ["锤", [{ memberId: "hammer-1" }, { memberId: "hammer-2" }]],
   ]);
-  const filled = fillUnderCapFromOverflow(base, overflow, 5, {
-    fillRoleOrder: ["火", "剑", "弩", "弓", "锤"],
+  const filled = fillUnderCapFromOverflow(base, overflow, 6, {
+    fillRoleOrder: HEDGEHOG_ST_FILL_ROLES,
   });
   assert.deepEqual(
     filled.get("枪").map((row) => row.memberId),
@@ -193,12 +195,12 @@ test("hedgehog fill order pulls fire and crossbows before hammers", () => {
     ["fire-1"],
   );
   assert.deepEqual(
-    filled.get("剑").map((row) => row.memberId),
-    ["sword-1"],
+    filled.get("弩").map((row) => row.memberId),
+    ["xbow-1", "xbow-2"],
   );
   assert.deepEqual(
-    filled.get("弩").map((row) => row.memberId),
-    ["xbow-1"],
+    filled.get("自").map((row) => row.memberId),
+    ["healer-a", "healer-b"],
   );
   assert.equal(filled.get("锤")?.length ?? 0, 0);
 });
