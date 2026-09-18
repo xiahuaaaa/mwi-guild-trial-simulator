@@ -35,7 +35,13 @@ import {
 } from "./weekly-combat-boss-pair.mjs";
 import { pairStrategyForStKey } from "./weekly-combat-partition.mjs";
 import { resolveCombatRosterApiBase } from "./guild-api-base.mjs";
-import { compareProgressFirst, progressFirstScore } from "./combat-lab-score.mjs";
+import {
+  anyPartyWipe,
+  compareMaxNoWipe,
+  compareProgressFirst,
+  isPartyWipe,
+  progressFirstScore,
+} from "./combat-lab-score.mjs";
 import { officialAbilityNameZh } from "../packages/mwi-data/official-zh-ability-names.mjs";
 
 const projectDirectory = path.resolve(
@@ -75,7 +81,7 @@ const fixture = JSON.parse(
     path.join(
       projectDirectory,
       process.env.MWI_GUILD_TRIAL_FIXTURE ??
-        "fixtures/monsters/guild-trial-2026-09-11-hedgehog-swarm.json",
+        "fixtures/monsters/guild-trial-2026-09-18-hedgehog-swarm.json",
     ),
     "utf8",
   ),
@@ -141,7 +147,8 @@ try {
         };
         process.stdout.write(
           `  ${row.bossName} 筛 x=${count}: 层=${run.wavesCleared} 末层=${run.finalProgressPercent}% ` +
-            `DPS=${Math.round(run.teamDps)} 死亡=${run.totalDeaths}\n`,
+            `DPS=${Math.round(run.teamDps)} 死亡=${run.totalDeaths}` +
+            `${isPartyWipe(run) ? " 团灭" : ""}\n`,
         );
         return row;
       }),
@@ -153,10 +160,17 @@ try {
       .sort(compareRows);
   }
 
-  process.stdout.write("\n将完整验证每边筛分前三的 x（不团灭、比末层进度）…\n");
+  const maxNoWipe = weekly.stKey === "hedgehog";
+  process.stdout.write(
+    maxNoWipe
+      ? "\n将从高到低完整验证不团灭的 x（最激进且 3600s×3 无团灭）…\n"
+      : "\n将完整验证每边筛分前三的 x（不团灭、比末层进度）…\n",
+  );
   const finals = [];
   for (const screen of screens) {
-    const top = screen.rows.slice(0, 3);
+    const top = maxNoWipe
+      ? noWipeCountsDescending(screen.rows)
+      : screen.rows.slice(0, 3);
     const verified = [];
     for (const candidate of top) {
       const roster = applyInsanityToTopDps(
@@ -169,25 +183,29 @@ try {
           simulateRoster(screen.fixtureBoss, roster, seed, finalSeconds),
         ),
       );
+      const wiped = anyPartyWipe(runs);
       for (const run of runs) {
         process.stdout.write(
           `  ${screen.boss.bossName} x=${candidate.count} seed ${run.seed}: ` +
             `层=${run.wavesCleared} 末层=${run.finalProgressPercent}% ` +
-            `DPS=${Math.round(run.teamDps)} 死亡=${run.totalDeaths}\n`,
+            `DPS=${Math.round(run.teamDps)} 死亡=${run.totalDeaths}` +
+            `${isPartyWipe(run) ? " 团灭" : ""}\n`,
         );
       }
       verified.push({
         count: candidate.count,
         names: candidate.names,
         runs,
+        anyWipe: wiped,
         averageWaves: mean(runs.map((run) => run.wavesCleared)),
         averageProgress: mean(runs.map((run) => run.finalProgressPercent)),
         averageDps: mean(runs.map((run) => run.teamDps)),
         averageDeaths: mean(runs.map((run) => run.totalDeaths)),
         score: mean(runs.map((run) => score(run))),
       });
+      if (maxNoWipe && !wiped) break;
     }
-    verified.sort(compareProgressFirst);
+    verified.sort(maxNoWipe ? compareMaxNoWipe : compareProgressFirst);
     finals.push({
       bossName: screen.boss.bossName,
       ranked: screen.ranked,
@@ -196,7 +214,11 @@ try {
     });
   }
 
-  process.stdout.write("\n=== 最优 x（不团灭、末层进度优先）===\n");
+  process.stdout.write(
+    maxNoWipe
+      ? "\n=== 最优 x（最激进且不团灭）===\n"
+      : "\n=== 最优 x（不团灭、末层进度优先）===\n",
+  );
   for (const row of finals) {
     const win = row.winner;
     process.stdout.write(
@@ -510,6 +532,16 @@ function averageMembers(runs, durationSeconds = 3600) {
 
 function compareRows(left, right) {
   return compareProgressFirst(left, right);
+}
+
+function noWipeCountsDescending(rows) {
+  const alive = [...(rows ?? [])]
+    .filter((row) => !isPartyWipe(row.run))
+    .sort((left, right) => Number(right.count) - Number(left.count));
+  if (alive.length) return alive;
+  return [...(rows ?? [])].sort(
+    (left, right) => Number(left.count) - Number(right.count),
+  );
 }
 
 function score(run) {

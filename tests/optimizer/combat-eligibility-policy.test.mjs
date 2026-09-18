@@ -33,7 +33,7 @@ test("WI combat eligibility is opt-in and TMD stays on attack-only floors", () =
   assert.equal(shieldsPerSideForGuild("TMD"), null);
   assert.equal(shieldsPerSideForGuild("WI"), WI_SHIELDS_PER_SIDE);
   assert.equal(WI_SHIELDS_PER_SIDE, 2);
-  assert.equal(defaultTeamCapForGuild("TMD"), 52);
+  assert.equal(defaultTeamCapForGuild("TMD"), 56);
   assert.equal(defaultTeamCapForGuild("WI"), WI_DEFAULT_TEAM_CAP);
   assert.equal(WI_DEFAULT_TEAM_CAP, 48);
   assert.match(combatEligibilityNote("TMD", 110), /^攻击≥110$/u);
@@ -104,6 +104,7 @@ test("composition lab wires WI eligibility without changing TMD defaults", async
   );
   assert.match(source, /combatReadinessOptionsForGuild\(guildId\)/u);
   assert.match(source, /defaultTeamCapForGuild\(guildId\)/u);
+  assert.match(source, /observedTeamCapacity/u);
   assert.match(source, /keepTopShieldsByDefense/u);
   assert.match(source, /shieldsPerSideForGuild\(guildId\)/u);
 });

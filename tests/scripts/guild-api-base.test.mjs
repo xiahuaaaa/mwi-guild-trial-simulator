@@ -66,3 +66,14 @@ test("weekly combat playbook and lab scripts do not default to local 8787", () =
     );
   }
 });
+
+test("weekly screening scripts default to this week's hedgehog/swarm fixture", () => {
+  const fixture = "fixtures/monsters/guild-trial-2026-09-18-hedgehog-swarm.json";
+  for (const [name, source] of [
+    ["lab", labSource],
+    ["insanity", insanitySource],
+    ["nature", natureSource],
+  ]) {
+    assert.match(source, new RegExp(fixture.replaceAll(".", "\\.")), name);
+  }
+});

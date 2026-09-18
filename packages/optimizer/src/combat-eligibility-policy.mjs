@@ -6,7 +6,7 @@ export const WI_COMBAT_MIN_PRIMARY_LEVEL = 125;
 export const WI_COMBAT_MIN_WEAPON_ITEM_LEVEL = 95;
 export const WI_SHIELDS_PER_SIDE = 2;
 export const WI_DEFAULT_TEAM_CAP = 48;
-export const TMD_DEFAULT_TEAM_CAP = 52;
+export const TMD_DEFAULT_TEAM_CAP = 56;
 
 export const PRIMARY_SKILL_BY_ROLE = {
   弓: { skillHrid: "/skills/ranged", label: "远程" },

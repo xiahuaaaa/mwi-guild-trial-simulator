@@ -12,7 +12,7 @@
  *   nature: ST keeps N healers; leftover nature → swarm as healers
  *   leftover ST seats fill from physical overflow 枪→剑→弓→弩→锤
  *
- * hedgehog + swarm (2026-09-11):
+ * hedgehog + swarm (2026-09-11, 2026-09-18):
  *   枪 majority → hedgehog (T1)
  *   锤/弩/剑/弓/火/水 majority → swarm (弩主体去虫群，溢出填刺猬)
  *   nature: ST keeps N healers; leftover nature → swarm as healers

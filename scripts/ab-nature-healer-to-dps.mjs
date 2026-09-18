@@ -77,7 +77,7 @@ const fixture = JSON.parse(
     path.join(
       projectDirectory,
       process.env.MWI_GUILD_TRIAL_FIXTURE ??
-        "fixtures/monsters/guild-trial-2026-09-11-hedgehog-swarm.json",
+        "fixtures/monsters/guild-trial-2026-09-18-hedgehog-swarm.json",
     ),
     "utf8",
   ),

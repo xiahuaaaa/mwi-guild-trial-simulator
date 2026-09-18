@@ -34,3 +34,25 @@ export function compareProgressFirst(left, right, countKey = "count") {
     Number(right[countKey] ?? 0) - Number(left[countKey] ?? 0)
   );
 }
+
+export function isPartyWipe(run) {
+  return run?.stopReason === "party_wipe";
+}
+
+export function anyPartyWipe(runs) {
+  return (runs ?? []).some(isPartyWipe);
+}
+
+/**
+ * Most-aggressive insanity ranking: any party wipe loses, then higher x.
+ * Waves / leftover progress only break remaining ties.
+ */
+export function compareMaxNoWipe(left, right, countKey = "count") {
+  const leftWipe = Boolean(left?.anyWipe) || anyPartyWipe(left?.runs);
+  const rightWipe = Boolean(right?.anyWipe) || anyPartyWipe(right?.runs);
+  if (leftWipe !== rightWipe) return Number(leftWipe) - Number(rightWipe);
+  return (
+    Number(right[countKey] ?? 0) - Number(left[countKey] ?? 0) ||
+    Number(right.score ?? 0) - Number(left.score ?? 0)
+  );
+}

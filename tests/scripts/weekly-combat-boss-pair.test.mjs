@@ -39,7 +39,7 @@ test("this week's chameleon/swarm fixture maps ST side onto the chameleon partit
 test("this week's hedgehog/swarm fixture maps ST side onto the chameleon partition key", async () => {
   const fixture = JSON.parse(
     await readFile(
-      path.join(fixtureDir, "guild-trial-2026-09-11-hedgehog-swarm.json"),
+      path.join(fixtureDir, "guild-trial-2026-09-18-hedgehog-swarm.json"),
       "utf8",
     ),
   );
@@ -49,6 +49,21 @@ test("this week's hedgehog/swarm fixture maps ST side onto the chameleon partiti
   assert.equal(weekly.stBoss.enemiesPerEncounter, 1);
   assert.equal(weekly.swarmBoss.enemiesPerEncounter, 4);
   assert.equal(publicBossKey(ST_PARTITION_KEY, weekly), "hedgehog");
+  assert.equal(fixture.rules.observedTeamCapacity, 56);
+});
+
+test("previous hedgehog/swarm fixture still maps ST side onto the chameleon partition key", async () => {
+  const fixture = JSON.parse(
+    await readFile(
+      path.join(fixtureDir, "guild-trial-2026-09-11-hedgehog-swarm.json"),
+      "utf8",
+    ),
+  );
+  const weekly = resolveWeeklyCombatBossPair(fixture);
+  assert.equal(weekly.stKey, "hedgehog");
+  assert.equal(weekly.stLabel, "试炼刺猬");
+  assert.equal(publicBossKey(ST_PARTITION_KEY, weekly), "hedgehog");
+  assert.equal(fixture.rules.observedTeamCapacity, 52);
 });
 
 test("this week's badger/swarm fixture maps ST side onto the chameleon partition key", async () => {

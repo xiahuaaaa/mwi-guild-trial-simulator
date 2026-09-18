@@ -87,7 +87,7 @@ const guildPaths = resolveGuildReportPaths(guildId, projectDirectory);
 const fixturePath = path.join(
   projectDirectory,
       process.env.MWI_GUILD_TRIAL_FIXTURE ??
-    "fixtures/monsters/guild-trial-2026-09-11-hedgehog-swarm.json",
+    "fixtures/monsters/guild-trial-2026-09-18-hedgehog-swarm.json",
 );
 const outputPath = guildPaths.availableRosterLabJsonPath;
 const screeningDurationSeconds = Number(
@@ -96,7 +96,7 @@ const screeningDurationSeconds = Number(
 const finalDurationSeconds = Number(
   process.env.MWI_GUILD_FINAL_DURATION_SECONDS ?? 3600,
 );
-const teamCap = Number(
+let teamCap = Number(
   process.env.MWI_GUILD_TEAM_CAP ?? defaultTeamCapForGuild(guildId),
 );
 const readinessOptions = combatReadinessOptionsForGuild(guildId);
@@ -246,6 +246,10 @@ const [membersRes, bindingsRes, fixture] = await Promise.all([
 ]);
 if (!membersRes.ok || !bindingsRes.ok) {
   throw new Error("failed to load guild API inputs");
+}
+if (!process.env.MWI_GUILD_TEAM_CAP) {
+  const fixtureCap = Number(fixture.rules?.observedTeamCapacity);
+  if (Number.isFinite(fixtureCap) && fixtureCap > 0) teamCap = fixtureCap;
 }
 const membersData = await membersRes.json();
 const bindingsData = await bindingsRes.json();

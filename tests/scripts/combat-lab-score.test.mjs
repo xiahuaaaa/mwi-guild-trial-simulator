@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  compareMaxNoWipe,
   compareProgressFirst,
   progressFirstScore,
   standardLabScore,
@@ -61,4 +62,27 @@ test("progress-first ties break toward the more aggressive count", () => {
   const low = { score: 12_000_000.4, count: 16 };
   const high = { score: 12_000_000.4, count: 32 };
   assert.ok(compareProgressFirst(high, low) < 0);
+});
+
+test("max-no-wipe ranking prefers the highest x that did not wipe", () => {
+  const wiped = {
+    count: 39,
+    anyWipe: true,
+    score: 13_000_000.9,
+    runs: [{ stopReason: "party_wipe", wavesCleared: 13 }],
+  };
+  const highAlive = {
+    count: 32,
+    anyWipe: false,
+    score: 12_000_000.2,
+    runs: [{ stopReason: "time_cap", wavesCleared: 12 }],
+  };
+  const lowAlive = {
+    count: 24,
+    anyWipe: false,
+    score: 13_000_000.5,
+    runs: [{ stopReason: "time_cap", wavesCleared: 13 }],
+  };
+  assert.ok(compareMaxNoWipe(highAlive, wiped) < 0);
+  assert.ok(compareMaxNoWipe(highAlive, lowAlive) < 0);
 });

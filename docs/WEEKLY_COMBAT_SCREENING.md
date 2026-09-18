@@ -107,7 +107,7 @@ cd /Users/xhy/Downloads/mwi/guild-trial-simulator
 
 ```bash
 # 不要把 Admin Key 打进终端历史以外的日志
-curl -sS -H "Authorization: Bearer $MWI_GUILD_API_ADMIN_KEY" \
+curl -sS -H "X-Admin-Key: $MWI_GUILD_API_ADMIN_KEY" \
   "$MWI_GUILD_API_BASE/api/guilds/TMD/weekly-trials/current" \
   > /tmp/weekly-trials-current.json
 
@@ -196,9 +196,9 @@ node scripts/ab-insanity-top-dps.mjs 2>&1 \
 
 - 入围：输出 + 减益，非光环，第 1 格是复活或疯狂。锤技能在比较 DPS 前套固定包（狂暴/狂速/精确/碎裂）。
 - 扫描 `0,2,4,…,32` 以及该边可改人数上限。
-- 1800s 初筛 → 每边前 3 个 x 做 3600s×3。
+- 1800s 初筛 → 变色龙/獾周每边筛分前 3 个 x 做 3600s×3。
 - 光环位永不改疯狂。
-- **刺猬周**：计分改为不团灭（`party_wipe` 直接出局），然后比通关层数 + 末层进度；个人死亡不参与排名，同分取更激进的 x。组合实验室分区仍用带死亡罚分的 `standardLabScore`。
+- **刺猬周**：计分改为不团灭（`party_wipe` 直接出局），然后取**最激进**的 x。1800s 无团灭的 x 从高到低做 3600s×3，碰到第一个三 seed 都不团灭的就停；个人死亡和少一层都不减分。组合实验室分区仍用带死亡罚分的 `standardLabScore`。
 
 出最优 x 后**立刻 apply**（会再跑一遍 3-seed 校验并写回 lab JSON）：
 
@@ -266,7 +266,7 @@ node scripts/run-and-publish-combat-assignment.mjs --skip-sim
 | 变量 | 默认 | 含义 |
 |---|---|---|
 | `MWI_GUILD_TRIAL_FIXTURE` | 当前周 json | monster fixture |
-| `MWI_GUILD_TEAM_CAP` | TMD 52 / WI 48 | 每场人数上限 |
+| `MWI_GUILD_TEAM_CAP` | TMD 56 / WI 48 | 每场人数上限；TMD 未设 env 时用本周 fixture 的 `observedTeamCapacity` |
 | `MWI_GUILD_EXCLUDE_MEMBERS` | `xlsx,sh1ro` | 手动排除 |
 | `MWI_GUILD_SCREEN_DURATION_SECONDS` | 180 | 单体技能包筛 |
 | `MWI_GUILD_AOE_SCREEN_DURATION_SECONDS` | 实验室 AOE 包=3600；A/B=1800 | 短筛时长 |
