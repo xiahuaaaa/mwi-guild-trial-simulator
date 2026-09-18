@@ -57,6 +57,7 @@ test("chameleon+swarm sends physical majority to chameleon and magic majority to
     "swarm",
   ]);
   assert.equal(coverageReserve(10), 2);
+  assert.equal(coverageReserve(3), 1);
 });
 
 test("badger+swarm sends physical majority to swarm and fire/water to ST", () => {

@@ -214,6 +214,38 @@ export const ST_NATURE_HEALER_POLLEN_KIT = [
   "/abilities/entangle",
 ];
 export const ST_NATURE_POLLEN_COVERAGE_COUNT = 3;
+/** Short fire/water sides: weakest nature healers carry smoke or frost. */
+export const COVERAGE_SEAT_TARGET = 2;
+export const SMOKE_BURST_HRID = "/abilities/smoke_burst";
+export const FROST_SURGE_HRID = "/abilities/frost_surge";
+/** Hedgehog: 群疗 / 增幅 / 烟爆 / 缠绕 */
+export const ST_NATURE_HEALER_SMOKE_KIT = [
+  "/abilities/rejuvenate",
+  "/abilities/elemental_affinity",
+  SMOKE_BURST_HRID,
+  "/abilities/entangle",
+];
+/** Hedgehog: 群疗 / 增幅 / 冰霜爆裂 / 缠绕 */
+export const ST_NATURE_HEALER_FROST_KIT = [
+  "/abilities/rejuvenate",
+  "/abilities/elemental_affinity",
+  FROST_SURGE_HRID,
+  "/abilities/entangle",
+];
+/** Swarm: 群疗 / 菌幕 / 烟爆 / 缠绕 */
+export const AOE_NATURE_HEALER_SMOKE_KIT = [
+  "/abilities/rejuvenate",
+  "/abilities/natures_veil",
+  SMOKE_BURST_HRID,
+  "/abilities/entangle",
+];
+/** Swarm: 群疗 / 菌幕 / 冰霜爆裂 / 缠绕 */
+export const AOE_NATURE_HEALER_FROST_KIT = [
+  "/abilities/rejuvenate",
+  "/abilities/natures_veil",
+  FROST_SURGE_HRID,
+  "/abilities/entangle",
+];
 
 export const PESTILENT_SHOT_HRID = "/abilities/pestilent_shot";
 export const STEADY_SHOT_HRID = "/abilities/steady_shot";
@@ -291,6 +323,9 @@ export function applyStNatureHealerKits(
     }
     const hrids = Array.isArray(row.abilityHrids) ? [...row.abilityHrids] : [];
     const special = hrids[0];
+    if (row.natureCoverageAbility) {
+      return { ...row, duty: "healer", abilityHrids: hrids };
+    }
     const kit = pollen.has(String(row.memberId))
       ? ST_NATURE_HEALER_POLLEN_KIT
       : ST_NATURE_HEALER_DRAIN_KIT;
@@ -423,6 +458,91 @@ function swarmFireUsesSmokeBurst(member, definition) {
   return member.roleIndex < smokeCount;
 }
 
+export function memberProvidesSmokeBurst(member, definition = {}) {
+  if (member?.combatType !== "火") return false;
+  if (isSingleTargetBossKey(definition.bossKey)) return true;
+  return swarmFireUsesSmokeBurst(member, definition);
+}
+
+export function memberProvidesFrostSurge(member) {
+  return member?.combatType === "水";
+}
+
+function natureHealerCoverageKit(member, definition = {}) {
+  const stBoss = isSingleTargetBossKey(definition.bossKey);
+  if (member?.natureCoverageAbility === "smoke_burst") {
+    return stBoss ? ST_NATURE_HEALER_SMOKE_KIT : AOE_NATURE_HEALER_SMOKE_KIT;
+  }
+  if (member?.natureCoverageAbility === "frost_surge") {
+    return stBoss ? ST_NATURE_HEALER_FROST_KIT : AOE_NATURE_HEALER_FROST_KIT;
+  }
+  return null;
+}
+
+/**
+ * When a side has fewer than 2 fire-smoke or 2 water-frost seats, the weakest
+ * nature healers split the gap: one smoke, then one frost. Hedgehog pollen
+ * still sits on the next weakest healers (target 3, at least 2).
+ */
+export function assignNatureDebuffBackup(team, definition = {}, options = {}) {
+  const rows = team ?? [];
+  const dpsByMemberId = options.dpsByMemberId ?? new Map();
+  const wanted = Number(options.coverageSeats ?? COVERAGE_SEAT_TARGET) || 2;
+  const stBoss = isSingleTargetBossKey(definition.bossKey);
+
+  for (const row of rows) {
+    if (row?.combatType !== "自") continue;
+    row.natureCoverageAbility = null;
+    if (stBoss) row.naturePollenCoverage = false;
+  }
+
+  const smokeHave = rows.filter((row) =>
+    memberProvidesSmokeBurst(row, definition),
+  ).length;
+  const frostHave = rows.filter((row) => memberProvidesFrostSurge(row)).length;
+  const needSmoke = Math.max(0, wanted - smokeHave);
+  const needFrost = Math.max(0, wanted - frostHave);
+
+  const healers = rows
+    .filter((row) => row?.combatType === "自" && row?.duty === "healer")
+    .sort((left, right) => {
+      const leftDps = Number(
+        dpsByMemberId.get(String(left.memberId)) ?? left.roleIndex ?? 0,
+      );
+      const rightDps = Number(
+        dpsByMemberId.get(String(right.memberId)) ?? right.roleIndex ?? 0,
+      );
+      return (
+        leftDps - rightDps ||
+        String(left.memberId ?? "").localeCompare(String(right.memberId ?? ""))
+      );
+    });
+
+  const smokeBackups = [];
+  const frostBackups = [];
+  let index = 0;
+  for (let n = 0; n < needSmoke && index < healers.length; n += 1, index += 1) {
+    healers[index].natureCoverageAbility = "smoke_burst";
+    smokeBackups.push(healers[index].memberId);
+  }
+  for (let n = 0; n < needFrost && index < healers.length; n += 1, index += 1) {
+    healers[index].natureCoverageAbility = "frost_surge";
+    frostBackups.push(healers[index].memberId);
+  }
+
+  const pollenIds = [];
+  if (stBoss) {
+    const remaining = healers.filter((row) => !row.natureCoverageAbility);
+    const pollenTake = Math.min(remaining.length, ST_NATURE_POLLEN_COVERAGE_COUNT);
+    for (let i = 0; i < pollenTake; i += 1) {
+      remaining[i].naturePollenCoverage = true;
+      pollenIds.push(remaining[i].memberId);
+    }
+  }
+
+  return { smokeBackups, frostBackups, pollenIds, needSmoke, needFrost };
+}
+
 export function ordinaryAbilityHridsForTemplate(member, definition = {}) {
   const role = member.combatType;
   const stBoss = isSingleTargetBossKey(definition.bossKey);
@@ -470,12 +590,16 @@ export function ordinaryAbilityHridsForTemplate(member, definition = {}) {
 
   if (stBoss && role === "自") {
     if (member.duty === "healer") {
+      const coverageKit = natureHealerCoverageKit(member, definition);
+      if (coverageKit) return [...coverageKit];
       const pollenCount = Number(
         definition.naturePollenCoverageCount ?? ST_NATURE_POLLEN_COVERAGE_COUNT,
       );
       const usePollen =
         member.naturePollenCoverage === true ||
-        (Number.isFinite(member.roleIndex) && member.roleIndex < pollenCount);
+        (member.naturePollenCoverage !== false &&
+          Number.isFinite(member.roleIndex) &&
+          member.roleIndex < pollenCount);
       return usePollen
         ? [...ST_NATURE_HEALER_POLLEN_KIT]
         : [...ST_NATURE_HEALER_DRAIN_KIT];
@@ -542,6 +666,8 @@ export function ordinaryAbilityHridsForTemplate(member, definition = {}) {
 
   const hrids = [...template.required, ...optional];
   if (!stBoss && role === "自" && member.duty === "healer") {
+    const coverageKit = natureHealerCoverageKit(member, definition);
+    if (coverageKit) return [...coverageKit];
     return [...NATURE_HEALER_FIXED_KIT];
   }
   return hrids;

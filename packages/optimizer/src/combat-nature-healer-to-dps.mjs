@@ -1,12 +1,29 @@
-import { NATURE_DPS_FIXED_KIT } from "./combat-ability-templates.mjs";
+import {
+  NATURE_DPS_FIXED_KIT,
+  SMOKE_BURST_HRID,
+  FROST_SURGE_HRID,
+} from "./combat-ability-templates.mjs";
 
 export function isNatureHealer(row) {
   return row?.combatType === "自" && row?.duty === "healer";
 }
 
+export function isNatureDebuffBackup(row) {
+  if (!isNatureHealer(row)) return false;
+  if (
+    row.natureCoverageAbility === "smoke_burst" ||
+    row.natureCoverageAbility === "frost_surge"
+  ) {
+    return true;
+  }
+  const hrids = row.abilityHrids ?? [];
+  return hrids.includes(SMOKE_BURST_HRID) || hrids.includes(FROST_SURGE_HRID);
+}
+
 export function rankedNatureHealerIds(roster, statsByMemberId = new Map()) {
   return [...(roster ?? [])]
     .filter(isNatureHealer)
+    .filter((row) => !isNatureDebuffBackup(row))
     .sort((left, right) => {
       const leftStats = statsByMemberId.get(String(left.memberId)) ?? {};
       const rightStats = statsByMemberId.get(String(right.memberId)) ?? {};

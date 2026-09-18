@@ -4,6 +4,7 @@ import { NATURE_DPS_FIXED_KIT } from "../../packages/optimizer/src/combat-abilit
 import {
   convertNatureHealersToDps,
   defaultNatureDpsCounts,
+  isNatureDebuffBackup,
   natureDpsSweepCountsForBoss,
   rankedNatureHealerIds,
 } from "../../packages/optimizer/src/combat-nature-healer-to-dps.mjs";
@@ -61,4 +62,36 @@ test("hedgehog week keeps ST nature as healers and still sweeps swarm", () => {
   assert.deepEqual(natureDpsSweepCountsForBoss("hedgehog", "hedgehog", 8), [0]);
   assert.deepEqual(natureDpsSweepCountsForBoss("hedgehog", "swarm", 3), [0, 1, 2, 3]);
   assert.deepEqual(natureDpsSweepCountsForBoss("badger", "badger", 2), [0, 1, 2]);
+});
+
+test("nature smoke/frost backups stay healers and are skipped by DPS conversion rank", () => {
+  const withBackup = [
+    ...roster,
+    {
+      memberId: "cover",
+      combatType: "自",
+      duty: "healer",
+      natureCoverageAbility: "smoke_burst",
+      abilityHrids: [
+        "/abilities/revive",
+        "/abilities/rejuvenate",
+        "/abilities/natures_veil",
+        "/abilities/smoke_burst",
+        "/abilities/entangle",
+      ],
+    },
+  ];
+  assert.equal(isNatureDebuffBackup(withBackup[3]), true);
+  const ranked = rankedNatureHealerIds(
+    withBackup,
+    new Map([
+      ["low", { enhancementLevel: 8, refined: true, magicLevel: 200 }],
+      ["high", { enhancementLevel: 12, refined: true, magicLevel: 120 }],
+      ["cover", { enhancementLevel: 20, refined: true, magicLevel: 200 }],
+    ]),
+  );
+  assert.deepEqual(ranked, ["high", "low"]);
+  const next = convertNatureHealersToDps(withBackup, 2, ranked);
+  assert.equal(next[3].duty, "healer");
+  assert.ok(next[3].abilityHrids.includes("/abilities/smoke_burst"));
 });

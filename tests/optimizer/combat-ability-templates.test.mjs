@@ -12,6 +12,11 @@ import {
   STEADY_SHOT_HRID,
   ST_NATURE_HEALER_DRAIN_KIT,
   ST_NATURE_HEALER_POLLEN_KIT,
+  ST_NATURE_HEALER_SMOKE_KIT,
+  ST_NATURE_HEALER_FROST_KIT,
+  AOE_NATURE_HEALER_SMOKE_KIT,
+  AOE_NATURE_HEALER_FROST_KIT,
+  assignNatureDebuffBackup,
   abilityTemplatesForBoss,
   isSingleTargetBossKey,
   ordinaryAbilityHridsForTemplate,
@@ -292,3 +297,92 @@ test("abilityTemplatesForBoss maps badger onto the AOE table", () => {
   assert.equal(aoe, abilityTemplatesForBoss("swarm"));
   assert.ok(aoe.自_healer.required.includes("/abilities/natures_veil"));
 });
+
+function coverageTeam({ fires = 0, waters = 0, healers = 6 } = {}) {
+  const team = [];
+  for (let i = 0; i < fires; i += 1) {
+    team.push({
+      memberId: `fire${i}`,
+      combatType: "火",
+      duty: "debuffer",
+      roleIndex: i,
+    });
+  }
+  for (let i = 0; i < waters; i += 1) {
+    team.push({
+      memberId: `water${i}`,
+      combatType: "水",
+      duty: "dps",
+      roleIndex: i,
+    });
+  }
+  for (let i = 0; i < healers; i += 1) {
+    team.push({
+      memberId: `nature${i}`,
+      combatType: "自",
+      duty: "healer",
+      roleIndex: i,
+    });
+  }
+  return team;
+}
+
+function natureKits(team, definition) {
+  return Object.fromEntries(
+    team
+      .filter((row) => row.combatType === "自")
+      .map((row) => [row.memberId, ordinaryAbilityHridsForTemplate(row, definition)]),
+  );
+}
+
+test("hedgehog 1 fire + 1 water: weakest natures split smoke/frost; pollen stays on the next three", () => {
+  const team = coverageTeam({ fires: 1, waters: 1, healers: 6 });
+  const assigned = assignNatureDebuffBackup(team, { bossKey: "hedgehog" });
+  assert.deepEqual(assigned.smokeBackups, ["nature0"]);
+  assert.deepEqual(assigned.frostBackups, ["nature1"]);
+  assert.deepEqual(assigned.pollenIds, ["nature2", "nature3", "nature4"]);
+  const kits = natureKits(team, { bossKey: "hedgehog" });
+  assert.deepEqual(kits.nature0, ST_NATURE_HEALER_SMOKE_KIT);
+  assert.deepEqual(kits.nature1, ST_NATURE_HEALER_FROST_KIT);
+  assert.deepEqual(kits.nature2, ST_NATURE_HEALER_POLLEN_KIT);
+  assert.deepEqual(kits.nature3, ST_NATURE_HEALER_POLLEN_KIT);
+  assert.deepEqual(kits.nature4, ST_NATURE_HEALER_POLLEN_KIT);
+  assert.deepEqual(kits.nature5, ST_NATURE_HEALER_DRAIN_KIT);
+  const pollenCount = Object.values(kits).filter((kit) =>
+    kit.includes("/abilities/toxic_pollen"),
+  ).length;
+  assert.ok(pollenCount >= 2);
+});
+
+test("swarm 2 fire + 2 water does not borrow nature for smoke or frost", () => {
+  const team = coverageTeam({ fires: 2, waters: 2, healers: 4 });
+  const assigned = assignNatureDebuffBackup(team, {
+    bossKey: "swarm",
+    fireSmokeBurstCount: 2,
+  });
+  assert.deepEqual(assigned.smokeBackups, []);
+  assert.deepEqual(assigned.frostBackups, []);
+  const kits = natureKits(team, { bossKey: "swarm", fireSmokeBurstCount: 2 });
+  assert.deepEqual(kits.nature0, NATURE_HEALER_FIXED_KIT);
+});
+
+test("swarm 1 fire + 2 water: weakest nature carries smoke, not frost", () => {
+  const team = coverageTeam({ fires: 1, waters: 2, healers: 4 });
+  const assigned = assignNatureDebuffBackup(team, {
+    bossKey: "swarm",
+    fireSmokeBurstCount: 2,
+  });
+  assert.deepEqual(assigned.smokeBackups, ["nature0"]);
+  assert.deepEqual(assigned.frostBackups, []);
+  const kits = natureKits(team, { bossKey: "swarm", fireSmokeBurstCount: 2 });
+  assert.deepEqual(kits.nature0, AOE_NATURE_HEALER_SMOKE_KIT);
+  assert.deepEqual(kits.nature1, NATURE_HEALER_FIXED_KIT);
+});
+
+test("AOE frost backup kit is 群疗/菌幕/冰霜/缠绕", () => {
+  const team = coverageTeam({ fires: 2, waters: 1, healers: 3 });
+  assignNatureDebuffBackup(team, { bossKey: "swarm", fireSmokeBurstCount: 2 });
+  const kits = natureKits(team, { bossKey: "swarm", fireSmokeBurstCount: 2 });
+  assert.deepEqual(kits.nature0, AOE_NATURE_HEALER_FROST_KIT);
+});
+

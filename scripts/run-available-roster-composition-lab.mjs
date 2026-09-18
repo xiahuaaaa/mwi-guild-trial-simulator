@@ -38,6 +38,7 @@ import {
   NATURE_DPS_MIDDLE_SLOTS,
   WATER_DPS_MIDDLE_SLOTS,
   WATER_SUPPORT_COUNTS,
+  assignNatureDebuffBackup,
   isSingleTargetBossKey,
   ordinaryAbilityHridsForTemplate,
 } from "../packages/optimizer/src/combat-ability-templates.mjs";
@@ -249,7 +250,9 @@ if (!membersRes.ok || !bindingsRes.ok) {
 }
 if (!process.env.MWI_GUILD_TEAM_CAP) {
   const fixtureCap = Number(fixture.rules?.observedTeamCapacity);
-  if (Number.isFinite(fixtureCap) && fixtureCap > 0) teamCap = fixtureCap;
+  if (Number.isFinite(fixtureCap) && fixtureCap > 0) {
+    teamCap = Math.min(fixtureCap, defaultTeamCapForGuild(guildId));
+  }
 }
 const membersData = await membersRes.json();
 const bindingsData = await bindingsRes.json();
@@ -1201,6 +1204,11 @@ function createTeamFromSources(definition, sourcesByRole) {
   }
   if (!raw.length) throw new Error("empty team");
   assignDuties(raw, definition);
+  assignNatureDebuffBackup(raw, definition, {
+    dpsByMemberId: new Map(
+      raw.map((row) => [String(row.memberId), coverageDpsProxy(row)]),
+    ),
+  });
   assignAuras(raw);
   // Members who neither carry an aura nor own insanity/revive/invincible cannot
   // fill the special slot — drop them rather than forcing a low-level aura.
